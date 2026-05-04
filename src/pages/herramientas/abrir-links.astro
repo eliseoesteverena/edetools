@@ -1,0 +1,321 @@
+---
+// src/pages/herramientas/abrir-links.astro
+import ToolLayout from '../../layouts/ToolLayout.astro';
+---
+
+<ToolLayout
+  title="Abrir links"
+  description="Pegá un bloque de texto con URLs (mensajes de WhatsApp, mails, etc.) y abrí todos los links detectados en pestañas nuevas de una sola vez."
+  icon="🔗"
+  tags={[
+    { label: 'client-side', type: 'web' },
+  ]}
+>
+
+  <div class="tool-wrap">
+
+    <!-- Entrada -->
+    <div class="input-panel">
+      <label for="inputArea">Texto con links</label>
+      <textarea
+        id="inputArea"
+        placeholder="Pegá aquí mensajes de WhatsApp, mails o cualquier texto con URLs…"
+      ></textarea>
+    </div>
+
+    <!-- Acciones -->
+    <div class="actions-bar">
+      <button class="btn-paste" id="pasteBtn" type="button">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <rect x="9" y="2" width="6" height="4" rx="1"/>
+          <path d="M8 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2h-2"/>
+        </svg>
+        Pegar portapapeles
+      </button>
+
+      <div class="actions-right">
+        <span class="link-count" id="linkCount" hidden>
+          <strong id="countNum">0</strong> links
+        </span>
+        <button class="btn-open" id="openAllBtn" type="button" disabled>
+          Abrir todo
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
+            <polyline points="15 3 21 3 21 9"/>
+            <line x1="10" y1="14" x2="21" y2="3"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Aviso -->
+    <p class="warn-msg" id="warnMsg" hidden></p>
+
+    <!-- Lista de links detectados -->
+    <div class="links-list" id="linksList" aria-live="polite"></div>
+
+  </div>
+
+</ToolLayout>
+
+<style>
+  .tool-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    max-width: 44rem;
+  }
+
+  /* ── Textarea ──────────────────────────────────────── */
+  .input-panel { display: flex; flex-direction: column; gap: var(--space-1); }
+
+  #inputArea {
+    width: 100%;
+    min-height: 180px;
+    resize: vertical;
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-md);
+    background: var(--color-white);
+    font-family: monospace;
+    font-size: var(--font-sm);
+    line-height: 1.7;
+    color: var(--color-gray-900);
+    transition: border-color 0.2s;
+  }
+
+  #inputArea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(26,26,46,0.08);
+  }
+
+  /* ── Barra de acciones ───────────────────────────────── */
+  .actions-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+  }
+
+  .actions-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+  }
+
+  .link-count {
+    font-size: var(--font-sm);
+    color: var(--color-gray-500);
+  }
+
+  .link-count strong {
+    color: var(--color-primary);
+    font-weight: 700;
+  }
+
+  /* Botón pegar */
+  .btn-paste {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-4);
+    background: var(--color-white);
+    color: var(--color-gray-700);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-md);
+    font-size: var(--font-sm);
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+  }
+
+  .btn-paste:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: var(--color-white);
+  }
+
+  /* Botón abrir todo */
+  .btn-open {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-4);
+    background: var(--color-primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--font-sm);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+
+  .btn-open:hover:not(:disabled)  { background: var(--color-primary-dark); }
+  .btn-open:active:not(:disabled) { transform: scale(0.98); }
+
+  .btn-open:disabled {
+    background: var(--color-gray-200);
+    color: var(--color-gray-500);
+    cursor: not-allowed;
+  }
+
+  /* ── Aviso ───────────────────────────────────────────── */
+  .warn-msg {
+    font-size: var(--font-xs);
+    color: #92400e;
+    background: #fef3c7;
+    border: 1px solid #fcd34d;
+    border-radius: var(--radius-md);
+    padding: var(--space-2) var(--space-3);
+    margin: 0;
+    line-height: 1.6;
+  }
+
+  /* ── Lista de links ──────────────────────────────────── */
+  .links-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .links-list a {
+    display: block;
+    font-size: var(--font-sm);
+    font-family: monospace;
+    color: var(--color-primary);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+
+  .links-list a:hover {
+    background: var(--color-primary-light);
+    text-decoration: underline;
+  }
+
+  .links-list .empty-msg {
+    font-size: var(--font-sm);
+    color: var(--color-gray-500);
+    font-style: italic;
+    padding: var(--space-2) var(--space-2);
+  }
+</style>
+
+<script>
+(function () {
+  const inputArea  = document.getElementById('inputArea')  as HTMLTextAreaElement;
+  const pasteBtn   = document.getElementById('pasteBtn')   as HTMLButtonElement;
+  const openAllBtn = document.getElementById('openAllBtn') as HTMLButtonElement;
+  const linksList  = document.getElementById('linksList')  as HTMLDivElement;
+  const countNum   = document.getElementById('countNum')   as HTMLElement;
+  const linkCount  = document.getElementById('linkCount')  as HTMLElement;
+  const warnMsg    = document.getElementById('warnMsg')    as HTMLParagraphElement;
+
+  const urlRegex = /(https?:\/\/[^\s]+)/ig;
+
+  // ── Extracción ────────────────────────────────────────
+  function extractUrls(text: string): string[] {
+    const urls: string[] = [];
+    for (const line of text.split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      const matches = line.match(urlRegex);
+      if (matches) urls.push(...matches.map(u => u.trim()));
+    }
+    return [...new Set(urls)];
+  }
+
+  // ── Render lista ──────────────────────────────────────
+  function renderLinks(urls: string[]) {
+    linksList.innerHTML = '';
+    warnMsg.hidden = true;
+
+    if (urls.length === 0) {
+      openAllBtn.disabled = true;
+      linkCount.hidden = true;
+      if (inputArea.value.trim()) {
+        linksList.innerHTML = '<span class="empty-msg">No se detectaron links en el texto.</span>';
+      }
+      return;
+    }
+
+    // Actualizar contador
+    countNum.textContent   = String(urls.length);
+    linkCount.hidden       = false;
+    openAllBtn.disabled    = false;
+
+    // Aviso preventivo para muchos links
+    if (urls.length > 20) {
+      warnMsg.textContent =
+        `${urls.length} links detectados. El navegador puede bloquear pop-ups masivos — si no se abren todos, habilitá los pop-ups para este sitio e intentá de nuevo.`;
+      warnMsg.hidden = false;
+    }
+
+    // Renderizar links
+    for (const u of urls) {
+      const a = document.createElement('a');
+      a.href   = u;
+      a.target = '_blank';
+      a.rel    = 'noopener noreferrer';
+      a.textContent = u;
+      linksList.appendChild(a);
+    }
+  }
+
+  // ── Pegar desde portapapeles ──────────────────────────
+  pasteBtn.addEventListener('click', async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      inputArea.value = text;
+      renderLinks(extractUrls(text));
+    } catch {
+      // El usuario puede pegar manualmente si no hay permisos
+      inputArea.focus();
+    }
+  });
+
+  // ── Actualización en vivo al escribir/pegar ───────────
+  inputArea.addEventListener('input', () => {
+    renderLinks(extractUrls(inputArea.value));
+  });
+
+  // ── Abrir todo ────────────────────────────────────────
+  openAllBtn.addEventListener('click', () => {
+    const urls = extractUrls(inputArea.value);
+    if (!urls.length) return;
+
+    let opened = 0;
+    for (const u of urls) {
+      try {
+        const a = document.createElement('a');
+        a.href   = u;
+        a.target = '_blank';
+        a.rel    = 'noopener noreferrer';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        opened++;
+      } catch (err) {
+        console.warn('Error abriendo:', u, err);
+      }
+    }
+
+    warnMsg.textContent = opened < urls.length
+      ? `Se intentaron abrir ${urls.length} links. El navegador permitió ~${opened}. Si faltan, habilitá pop-ups para este sitio.`
+      : `Se intentaron abrir ${urls.length} links. Si ves menos pestañas, revisá el bloqueador de pop-ups del navegador.`;
+    warnMsg.hidden = false;
+  });
+
+  // ── Init ──────────────────────────────────────────────
+  renderLinks([]);
+})();
+</script>
