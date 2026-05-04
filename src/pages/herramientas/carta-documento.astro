@@ -1,0 +1,671 @@
+---
+// src/pages/herramientas/carta-documento.astro
+// Herramienta: Formato Carta Documento (Correo Argentino)
+//
+// Arquitectura original: dos archivos separados (formulario + iframe con template).
+// Adaptación: página única. El formulario y la plantilla de impresión conviven.
+// Al imprimir, @media print oculta el formulario y muestra solo la plantilla
+// posicionada con los márgenes configurables sobre la hoja pre-impresa.
+//
+// Dependencias externas:
+//   - Quill 2 (editor rich text) — desde CDN
+//   - CSS de Quill inlined en <style> para evitar requests externos en impresión
+
+import ToolLayout from '../../layouts/ToolLayout.astro';
+---
+
+<ToolLayout
+  title="Formato Carta Documento"
+  description="Completá los datos del remitente, destinatario y cuerpo de la carta. El contenido se imprime posicionado sobre la hoja pre-impresa de Correo Argentino."
+  icon="📄"
+  tags={[
+    { label: 'impresión', type: 'print' },
+    { label: 'client-side', type: 'web' },
+  ]}
+>
+
+  <!-- Quill CSS desde CDN (solo toolbar, se usa en pantalla) -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/quill@2.0.0-rc.5/dist/quill.snow.css"
+  />
+
+  <!-- Estilos de posicionamiento de la plantilla de impresión -->
+  <!-- Inlined desde template-correo-arg.css y qr-editor-for-template.css -->
+  <style id="template-styles">
+    /* ── template-correo-arg.css ─────────────────────── */
+    .cd-page { box-sizing: border-box; }
+    .cd-page * { box-sizing: border-box; }
+
+    .cd-page .page {
+      width: 21.59cm;
+      height: 35.56cm;
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    .cd-page .container {
+      width: 19cm;
+      height: 29.2cm;
+      position: absolute;
+      font-size: 10pt;
+    }
+
+    .cd-page .datos {
+      width: 16.2cm;
+      height: 2.87cm;
+      float: left;
+    }
+
+    .cd-page .cabecera {
+      width: 19cm;
+      margin-left: 1.2cm;
+      float: left;
+    }
+
+    .cd-page .n {
+      width: 9.2cm;
+      height: 1.27cm;
+      text-transform: capitalize;
+      float: left;
+      word-wrap: break-word;
+    }
+
+    .cd-page .address-c {
+      width: 19cm;
+      height: 0.84cm;
+      float: left;
+      margin-left: 1.2cm;
+    }
+
+    .cd-page .a {
+      width: 9.2cm;
+      height: 0.84cm;
+      padding-top: 0.5cm;
+      float: left;
+    }
+
+    .cd-page .zip-city-state {
+      width: 19cm;
+      height: 0.75cm;
+      float: left;
+      margin-left: 1.09cm;
+    }
+
+    .cd-page .zip-city-state-int {
+      height: 0.85cm;
+      float: left;
+      width: 9.2cm;
+    }
+
+    .cd-page .zip {
+      width: 2.75cm;
+      padding: 0.5cm 0.15cm 0 0.15cm;
+      height: 0.75cm;
+      float: left;
+    }
+
+    .cd-page .city {
+      width: 3.6cm;
+      padding: 0.5cm 0.15cm 0 0.15cm;
+      height: 0.75cm;
+      float: left;
+    }
+
+    .cd-page .state {
+      width: 2.8cm;
+      padding: 0.5cm 0.15cm 0 0.15cm;
+      height: 0.75cm;
+      float: left;
+    }
+
+    .cd-page .l-enty {
+      width: 16.23cm;
+      height: 7.42cm;
+      float: left;
+    }
+
+    .cd-page .contenido-carta {
+      width: 19.95cm;
+      min-height: 13.17cm;
+      max-height: 14cm;
+      padding: 0.3cm;
+      float: left;
+      text-align: justify;
+      text-overflow: ellipsis;
+      white-space: pre-wrap;
+    }
+
+    .cd-page .content-firma {
+      width: 18.1cm;
+      height: 1.4cm;
+      float: left;
+      position: absolute;
+      bottom: 0;
+    }
+
+    .cd-page .c-firma {
+      right: 0;
+      position: absolute;
+    }
+
+    .cd-page .c-firma,
+    .cd-page .e-firma,
+    .cd-page .firmante,
+    .cd-page .dni {
+      width: 6cm;
+      text-align: center;
+    }
+
+    .cd-page .e-firma { height: 2.4cm; }
+    .cd-page .dni     { height: 0.75cm; }
+
+    /* ── Quill output en la plantilla de impresión ────── */
+    .cd-page .contenido-carta p,
+    .cd-page .contenido-carta ol,
+    .cd-page .contenido-carta ul,
+    .cd-page .contenido-carta pre,
+    .cd-page .contenido-carta blockquote,
+    .cd-page .contenido-carta h1,
+    .cd-page .contenido-carta h2,
+    .cd-page .contenido-carta h3 { margin: 0; padding: 0; }
+
+    .cd-page .contenido-carta .ql-align-center  { text-align: center; }
+    .cd-page .contenido-carta .ql-align-right   { text-align: right; }
+    .cd-page .contenido-carta .ql-align-justify { text-align: justify; }
+
+    .cd-page .contenido-carta .ql-size-small { font-size: 0.75em; }
+    .cd-page .contenido-carta .ql-size-large { font-size: 1.5em; }
+    .cd-page .contenido-carta .ql-size-huge  { font-size: 2.5em; }
+  </style>
+
+  <!-- ── FORMULARIO ──────────────────────────────────── -->
+  <div class="form-wrap" id="formWrap">
+
+    <div class="form-grid">
+
+      <!-- Remitente -->
+      <div class="form-card">
+        <h2 class="form-card-title">Remitente</h2>
+        <div class="field-row">
+          <div class="field">
+            <label for="name_rt">Nombre y Apellido</label>
+            <input type="text" id="name_rt" placeholder="Juan Pérez" />
+          </div>
+          <div class="field">
+            <label for="address_rt">Dirección</label>
+            <input type="text" id="address_rt" placeholder="Av. Corrientes 1234" />
+          </div>
+        </div>
+        <div class="field-row field-row--3">
+          <div class="field">
+            <label for="cp_rt">Cód. Postal</label>
+            <input type="text" id="cp_rt" placeholder="1043" />
+          </div>
+          <div class="field field--grow">
+            <label for="city_rt">Localidad</label>
+            <input type="text" id="city_rt" placeholder="Buenos Aires" />
+          </div>
+          <div class="field field--grow">
+            <label for="state_rt">Provincia</label>
+            <input type="text" id="state_rt" placeholder="CABA" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Destinatario -->
+      <div class="form-card">
+        <h2 class="form-card-title">Destinatario</h2>
+        <div class="field-row">
+          <div class="field">
+            <label for="name_dt">Nombre y Apellido</label>
+            <input type="text" id="name_dt" placeholder="María García" />
+          </div>
+          <div class="field">
+            <label for="address_dt">Dirección</label>
+            <input type="text" id="address_dt" placeholder="Belgrano 567" />
+          </div>
+        </div>
+        <div class="field-row field-row--3">
+          <div class="field">
+            <label for="cp_dt">Cód. Postal</label>
+            <input type="text" id="cp_dt" placeholder="3000" />
+          </div>
+          <div class="field field--grow">
+            <label for="city_dt">Localidad</label>
+            <input type="text" id="city_dt" placeholder="Santa Fe" />
+          </div>
+          <div class="field field--grow">
+            <label for="state_dt">Provincia</label>
+            <input type="text" id="state_dt" placeholder="Santa Fe" />
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Cuerpo -->
+    <div class="form-card">
+      <h2 class="form-card-title">Cuerpo de la carta</h2>
+      <div
+        id="editor"
+        style="height: 320px; font-family: Arial, Helvetica, sans-serif;"
+      ></div>
+    </div>
+
+    <!-- Firma -->
+    <div class="form-card">
+      <h2 class="form-card-title">Firma</h2>
+      <div class="field-row">
+        <div class="field">
+          <label for="sing_name">Nombre y Apellido</label>
+          <input type="text" id="sing_name" placeholder="Juan Pérez" />
+        </div>
+        <div class="field">
+          <label for="sing_dni">DNI</label>
+          <input type="text" id="sing_dni" placeholder="12.345.678" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Config avanzada -->
+    <details class="advanced-config">
+      <summary>Configuración avanzada de márgenes</summary>
+      <div class="adv-inner">
+        <p class="adv-hint">
+          Ajustá la posición del contenido sobre la hoja pre-impresa.
+          Los valores por defecto están calibrados para el formulario estándar de Correo Argentino.
+        </p>
+        <div class="field-row">
+          <div class="field">
+            <label for="margin_left">Margen izquierdo (cm)</label>
+            <input type="number" id="margin_left" step="0.01" value="0.60" />
+          </div>
+          <div class="field">
+            <label for="margin_top">Margen superior (cm)</label>
+            <input type="number" id="margin_top" step="0.01" value="2.56" />
+          </div>
+          <div class="field field--btn">
+            <button type="button" id="res_margin" class="btn-reset-margins">
+              Restablecer
+            </button>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <!-- Botón imprimir -->
+    <div class="print-action">
+      <button type="button" id="printBtn" class="btn-print">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
+          <rect x="6" y="14" width="12" height="8"/>
+          <circle cx="18" cy="11.5" r="0.5" fill="currentColor"/>
+        </svg>
+        Imprimir CD
+      </button>
+    </div>
+
+  </div><!-- /formWrap -->
+
+  <!-- ── PLANTILLA DE IMPRESIÓN ─────────────────────────
+       Invisible en pantalla. Al imprimir se muestra sola.
+       Los márgenes .container se aplican dinámicamente por JS.
+  ──────────────────────────────────────────────────── -->
+  <div class="cd-page" id="cdPage">
+    <div class="page">
+      <div class="container" id="cdContainer">
+
+        <!-- Bloque de datos × 2 (anverso y reverso de la hoja) -->
+        <div class="datos">
+          <div class="cabecera">
+            <div class="n" id="p_name_rt"></div>
+            <div class="n" id="p_name_dt"></div>
+          </div>
+          <div class="address-c">
+            <div class="a" id="p_address_rt"></div>
+            <div class="a" id="p_address_dt"></div>
+          </div>
+          <div class="zip-city-state">
+            <div class="zip-city-state-int">
+              <div class="zip"  id="p_cp_rt"></div>
+              <div class="city" id="p_city_rt"></div>
+              <div class="state" id="p_state_rt"></div>
+            </div>
+            <div class="zip-city-state-int">
+              <div class="zip"  id="p_cp_dt"></div>
+              <div class="city" id="p_city_dt"></div>
+              <div class="state" id="p_state_dt"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="l-enty">&nbsp;</div>
+
+        <div class="datos">
+          <div class="cabecera">
+            <div class="n" id="p_name_rt2"></div>
+            <div class="n" id="p_name_dt2"></div>
+          </div>
+          <div class="address-c">
+            <div class="a" id="p_address_rt2"></div>
+            <div class="a" id="p_address_dt2"></div>
+          </div>
+          <div class="zip-city-state">
+            <div class="zip-city-state-int">
+              <div class="zip"  id="p_cp_rt2"></div>
+              <div class="city" id="p_city_rt2"></div>
+              <div class="state" id="p_state_rt2"></div>
+            </div>
+            <div class="zip-city-state-int">
+              <div class="zip"  id="p_cp_dt2"></div>
+              <div class="city" id="p_city_dt2"></div>
+              <div class="state" id="p_state_dt2"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cuerpo -->
+        <div class="contenido-carta" id="p_body"></div>
+
+        <!-- Firma -->
+        <div class="content-firma">
+          <div class="c-firma">
+            <div class="e-firma">&nbsp;</div>
+            <div class="firmante" id="p_firmante"></div>
+            <div class="dni" id="p_dni"></div>
+          </div>
+        </div>
+
+      </div><!-- /container -->
+    </div><!-- /page -->
+  </div><!-- /cd-page -->
+
+</ToolLayout>
+
+<!-- ════════════════════════════════════════════════════
+     ESTILOS
+════════════════════════════════════════════════════ -->
+<style>
+  /* ── Formulario ────────────────────────────────────── */
+  .form-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    max-width: 56rem;
+  }
+
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
+  }
+
+  @media (max-width: 640px) {
+    .form-grid { grid-template-columns: 1fr; }
+  }
+
+  .form-card {
+    background: var(--color-white);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .form-card-title {
+    font-size: var(--font-sm);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-gray-500);
+    margin-bottom: var(--space-1);
+  }
+
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-3);
+  }
+
+  .field-row--3 { grid-template-columns: auto 1fr 1fr; }
+  .field--grow  { flex: 1; }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .field--btn {
+    display: flex;
+    align-items: flex-end;
+  }
+
+  /* ── Config avanzada ────────────────────────────────── */
+  .advanced-config {
+    background: var(--color-white);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4) var(--space-6);
+  }
+
+  .advanced-config summary {
+    font-size: var(--font-sm);
+    font-weight: 500;
+    color: var(--color-gray-700);
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .advanced-config summary::before {
+    content: '▶';
+    font-size: 0.6rem;
+    color: var(--color-gray-500);
+    transition: transform 0.2s;
+  }
+
+  .advanced-config[open] summary::before { transform: rotate(90deg); }
+
+  .adv-inner {
+    margin-top: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .adv-hint {
+    font-size: var(--font-xs);
+    color: var(--color-gray-500);
+    background: var(--color-gray-50);
+    border-left: 3px solid var(--color-gray-200);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-sm);
+    margin-bottom: 0;
+  }
+
+  .btn-reset-margins {
+    background: var(--color-gray-100);
+    color: var(--color-gray-700);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-md);
+    font-size: var(--font-sm);
+    font-family: inherit;
+    padding: var(--space-2) var(--space-3);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+  }
+
+  .btn-reset-margins:hover { background: var(--color-gray-200); }
+
+  /* ── Botón imprimir ─────────────────────────────────── */
+  .print-action { display: flex; }
+
+  .btn-print {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-6);
+    background: var(--color-accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--font-base);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+
+  .btn-print:hover  { background: #c0303b; }
+  .btn-print:active { transform: scale(0.98); }
+
+  /* ── Quill: ajustes dentro del formulario ───────────── */
+  .ql-snow { max-width: 100%; }
+  .ql-container { font-size: var(--font-sm); }
+
+  /* ── Plantilla de impresión — oculta en pantalla ────── */
+  .cd-page { display: none; }
+
+  /* ── @media print ───────────────────────────────────── */
+  @media print {
+    /* Ocultar todo el shell de edetools y el formulario */
+    .site-header,
+    .breadcrumb-bar,
+    .tool-hero,
+    .site-footer,
+    #formWrap { display: none !important; }
+
+    /* Mostrar la plantilla */
+    .cd-page { display: block !important; }
+
+    /* Sin márgenes de página — los márgenes los controla .container */
+    @page { margin: 0; size: 21.59cm 35.56cm; }
+
+    body { margin: 0; padding: 0; }
+  }
+</style>
+
+<!-- ════════════════════════════════════════════════════
+     SCRIPT
+════════════════════════════════════════════════════ -->
+<!-- Quill desde CDN con is:inline para que Astro no lo procese -->
+<script is:inline src="https://cdn.jsdelivr.net/npm/quill@2.0.0-rc.5/dist/quill.js"></script>
+
+<script>
+(function () {
+  // ── Inicializar Quill ────────────────────────────────
+  // @ts-ignore
+  const quill = new Quill('#editor', {
+    modules: {
+      toolbar: [
+        ['bold', 'italic', 'underline', 'strike'],
+        [{ size: ['small', false, 'large', 'huge'] }],
+        [{ align: [] }],
+      ],
+    },
+    theme: 'snow',
+  });
+
+  // ── Referencias del formulario ───────────────────────
+  const get = (id: string) => document.getElementById(id) as HTMLInputElement;
+
+  const printBtn    = document.getElementById('printBtn')    as HTMLButtonElement;
+  const resMargin   = document.getElementById('res_margin')  as HTMLButtonElement;
+  const cdContainer = document.getElementById('cdContainer') as HTMLDivElement;
+
+  // ── Restablecer márgenes ─────────────────────────────
+  resMargin.addEventListener('click', () => {
+    get('margin_top').value  = '2.56';
+    get('margin_left').value = '0.60';
+  });
+
+  // ── Recoger datos del formulario ─────────────────────
+  function getDatos() {
+    return {
+      remitente: {
+        name:    get('name_rt').value.trim(),
+        address: get('address_rt').value.trim(),
+        cp:      get('cp_rt').value.trim(),
+        city:    get('city_rt').value.trim(),
+        state:   get('state_rt').value.trim(),
+      },
+      destinatario: {
+        name:    get('name_dt').value.trim(),
+        address: get('address_dt').value.trim(),
+        cp:      get('cp_dt').value.trim(),
+        city:    get('city_dt').value.trim(),
+        state:   get('state_dt').value.trim(),
+      },
+      body:    (document.querySelector('.ql-editor') as HTMLElement).innerHTML.trim(),
+      firma:   get('sing_name').value.trim(),
+      dni:     get('sing_dni').value.trim(),
+      mTop:    get('margin_top').value.trim()  || '2.56',
+      mLeft:   get('margin_left').value.trim() || '0.60',
+    };
+  }
+
+  // ── Rellenar la plantilla de impresión ───────────────
+  function fillTemplate(d: ReturnType<typeof getDatos>) {
+    // Función auxiliar para setear texto de un elemento
+    const setText = (id: string, val: string) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = val;
+    };
+    const setHtml = (id: string, val: string) => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = val;
+    };
+
+    // Bloque 1 (remitente / destinatario)
+    setText('p_name_rt',    d.remitente.name);
+    setText('p_name_dt',    d.destinatario.name);
+    setText('p_address_rt', d.remitente.address);
+    setText('p_address_dt', d.destinatario.address);
+    setText('p_cp_rt',      d.remitente.cp);
+    setText('p_city_rt',    d.remitente.city);
+    setText('p_state_rt',   d.remitente.state);
+    setText('p_cp_dt',      d.destinatario.cp);
+    setText('p_city_dt',    d.destinatario.city);
+    setText('p_state_dt',   d.destinatario.state);
+
+    // Bloque 2 (copia del encabezado)
+    setText('p_name_rt2',    d.remitente.name);
+    setText('p_name_dt2',    d.destinatario.name);
+    setText('p_address_rt2', d.remitente.address);
+    setText('p_address_dt2', d.destinatario.address);
+    setText('p_cp_rt2',      d.remitente.cp);
+    setText('p_city_rt2',    d.remitente.city);
+    setText('p_state_rt2',   d.remitente.state);
+    setText('p_cp_dt2',      d.destinatario.cp);
+    setText('p_city_dt2',    d.destinatario.city);
+    setText('p_state_dt2',   d.destinatario.state);
+
+    // Cuerpo (HTML de Quill)
+    setHtml('p_body', d.body);
+
+    // Firma
+    setText('p_firmante', d.firma);
+    setText('p_dni',      d.dni);
+
+    // Márgenes de posicionamiento sobre la hoja pre-impresa
+    cdContainer.style.marginLeft = `${d.mLeft}cm`;
+    cdContainer.style.marginTop  = `${d.mTop}cm`;
+  }
+
+  // ── Imprimir ─────────────────────────────────────────
+  printBtn.addEventListener('click', () => {
+    const datos = getDatos();
+    fillTemplate(datos);
+    // Pequeño delay para que el DOM se actualice antes de print()
+    setTimeout(() => window.print(), 60);
+  });
+})();
+</script>
