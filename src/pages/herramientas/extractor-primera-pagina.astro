@@ -1,0 +1,726 @@
+---
+// src/pages/herramientas/extractor-primera-pagina.astro
+import ToolLayout from '../../layouts/ToolLayout.astro';
+---
+
+<ToolLayout
+  title="Extractor de primera página"
+  description="Cargá múltiples PDFs, seleccioná cuáles procesar y descargá un único PDF con la primera página de cada uno."
+  icon="📑"
+  tags={[
+    { label: 'pdf', type: 'pdf' },
+    { label: 'worker', type: 'web' },
+  ]}
+>
+
+  <div class="tool-wrap">
+
+    <!-- ── Toolbar ────────────────────────────────────── -->
+    <div class="toolbar">
+      <div class="toolbar-left">
+
+        <!-- Cargar archivos -->
+        <label class="btn-load" for="fileInput">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+          Cargar PDFs
+          <input type="file" id="fileInput" accept=".pdf" multiple />
+        </label>
+
+        <!-- Seleccionar todo / ninguno -->
+        <button class="btn-secondary" id="btnSelectAll"   type="button">Seleccionar todo</button>
+        <button class="btn-secondary" id="btnSelectNone"  type="button">Ninguno</button>
+
+        <!-- Palabras clave -->
+        <button class="btn-secondary" id="btnKw" type="button">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          Palabras clave
+        </button>
+
+      </div>
+
+      <!-- Contadores -->
+      <div class="counters" id="counters"></div>
+
+      <!-- Procesar -->
+      <button class="btn-process" id="btnProcess" type="button" disabled>
+        Procesar
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- ── Grid de archivos ───────────────────────────── -->
+    <div class="grid-wrap">
+      <div class="grid" id="grid"></div>
+      <div class="empty-msg" id="emptyMsg">Cargá archivos PDF para comenzar.</div>
+    </div>
+
+    <!-- ── Log ───────────────────────────────────────── -->
+    <div class="log-panel">
+      <div class="log-bar">
+        <span class="log-label">Log</span>
+        <button class="btn-log-clear" id="btnLogClear" type="button">limpiar</button>
+      </div>
+      <div class="log-body" id="logBody"></div>
+    </div>
+
+  </div>
+
+  <!-- ── Modal palabras clave ───────────────────────── -->
+  <div class="modal-overlay" id="modalOverlay" aria-hidden="true">
+    <div class="modal-box" role="dialog" aria-labelledby="modalTitle">
+      <div class="modal-header">
+        <h2 class="modal-title" id="modalTitle">Palabras clave</h2>
+        <button class="modal-close" id="btnModalClose" type="button" aria-label="Cerrar">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-hint">
+          Separadas por coma. Si parte del nombre del archivo coincide, se agrupa y ordena automáticamente al procesar.<br>
+          <em>Ej: factura, recibo, contrato 2024</em>
+        </p>
+        <textarea id="kwArea" spellcheck="false" placeholder="factura, recibo, nota de crédito"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-primary" id="btnModalSave" type="button">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+</ToolLayout>
+
+<style>
+  /* ── Layout general ─────────────────────────────── */
+  .tool-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-lg);
+    background: var(--color-white);
+    overflow: hidden;
+
+    /* La herramienta ocupa el alto disponible en pantalla */
+    height: calc(100vh - 220px);
+    min-height: 500px;
+  }
+
+  /* ── Toolbar ──────────────────────────────────── */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-gray-200);
+    flex-wrap: wrap;
+    flex-shrink: 0;
+    background: var(--color-gray-50);
+  }
+
+  .toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    flex: 1;
+  }
+
+  /* Botón cargar (label sobre input file) */
+  .btn-load {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-3);
+    background: var(--color-primary);
+    color: #fff;
+    border-radius: var(--radius-md);
+    font-size: var(--font-sm);
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s;
+  }
+
+  .btn-load:hover { background: var(--color-primary-dark); }
+
+  .btn-load input[type="file"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: var(--space-1) var(--space-3);
+    background: var(--color-white);
+    color: var(--color-gray-700);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-md);
+    font-size: var(--font-sm);
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: border-color 0.2s, color 0.2s;
+  }
+
+  .btn-secondary:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .btn-process {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-4);
+    background: var(--color-accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--font-sm);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.2s, transform 0.1s;
+    margin-left: auto;
+  }
+
+  .btn-process:hover:not(:disabled)  { background: #c0303b; }
+  .btn-process:active:not(:disabled) { transform: scale(0.98); }
+
+  .btn-process:disabled {
+    background: var(--color-gray-200);
+    color: var(--color-gray-500);
+    cursor: not-allowed;
+  }
+
+  /* ── Contadores ──────────────────────────────── */
+  .counters {
+    display: flex;
+    gap: var(--space-1);
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .counter {
+    font-size: var(--font-xs);
+    padding: 2px var(--space-2);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-sm);
+    color: var(--color-gray-500);
+    background: var(--color-white);
+    white-space: nowrap;
+  }
+
+  .counter strong { color: var(--color-gray-900); font-weight: 600; }
+
+  /* ── Grid de archivos ────────────────────────── */
+  .grid-wrap {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-4);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: var(--space-2);
+  }
+
+  .empty-msg {
+    font-size: var(--font-sm);
+    color: var(--color-gray-500);
+    text-align: center;
+    padding: var(--space-8);
+    display: none;
+  }
+
+  .empty-msg.visible { display: block; }
+
+  /* Cards de archivo */
+  .file-card {
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-md);
+    padding: var(--space-3);
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    background: var(--color-white);
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  .file-card:hover   { border-color: var(--color-primary); }
+  .file-card.selected {
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
+  }
+
+  .file-card input[type="checkbox"] {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 15px;
+    height: 15px;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+  }
+
+  .file-card .card-name {
+    font-size: var(--font-xs);
+    word-break: break-all;
+    padding-right: 18px;
+    line-height: 1.5;
+    color: var(--color-gray-900);
+    margin-bottom: 0;
+  }
+
+  .file-card .card-tag {
+    display: inline-block;
+    margin-top: var(--space-1);
+    font-size: 0.6rem;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 1rem;
+    background: var(--color-primary-light);
+    color: var(--color-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* ── Log ─────────────────────────────────────── */
+  .log-panel {
+    border-top: 1px solid var(--color-gray-200);
+    height: 130px;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    background: var(--color-gray-50);
+  }
+
+  .log-bar {
+    display: flex;
+    align-items: center;
+    padding: 4px var(--space-4);
+    border-bottom: 1px solid var(--color-gray-200);
+    flex-shrink: 0;
+  }
+
+  .log-label {
+    font-size: var(--font-xs);
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-gray-500);
+  }
+
+  .btn-log-clear {
+    margin-left: auto;
+    background: none;
+    border: none;
+    font-size: var(--font-xs);
+    color: var(--color-gray-500);
+    cursor: pointer;
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-sm);
+    font-family: inherit;
+    transition: background 0.15s;
+  }
+
+  .btn-log-clear:hover {
+    background: var(--color-gray-200);
+    color: var(--color-gray-900);
+  }
+
+  .log-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-2) var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .log-line {
+    font-size: var(--font-xs);
+    font-family: monospace;
+    line-height: 1.6;
+    color: var(--color-gray-700);
+  }
+
+  .log-line.ok    { color: #166534; }
+  .log-line.error { color: var(--color-accent); }
+  .log-line.warn  { color: #92400e; }
+  .log-line.info  { color: var(--color-gray-500); }
+
+  /* ── Modal ───────────────────────────────────── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-overlay.open {
+    display: flex;
+  }
+
+  .modal-box {
+    background: var(--color-white);
+    border-radius: var(--radius-lg);
+    width: min(420px, 90vw);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+
+  .modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-4) var(--space-6);
+    border-bottom: 1px solid var(--color-gray-200);
+  }
+
+  .modal-title {
+    font-size: var(--font-base);
+    font-weight: 600;
+    margin-bottom: 0;
+  }
+
+  .modal-close {
+    background: none;
+    border: none;
+    font-size: 1.4rem;
+    line-height: 1;
+    color: var(--color-gray-500);
+    cursor: pointer;
+    padding: 0 var(--space-1);
+    font-family: inherit;
+  }
+
+  .modal-close:hover { color: var(--color-gray-900); background: none; }
+
+  .modal-body {
+    padding: var(--space-4) var(--space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .modal-hint {
+    font-size: var(--font-xs);
+    color: var(--color-gray-500);
+    line-height: 1.7;
+    margin-bottom: 0;
+  }
+
+  #kwArea {
+    width: 100%;
+    min-height: 80px;
+    resize: vertical;
+    font-family: monospace;
+    font-size: var(--font-sm);
+    padding: var(--space-2) var(--space-3);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-md);
+  }
+
+  .modal-footer {
+    padding: var(--space-3) var(--space-6);
+    border-top: 1px solid var(--color-gray-200);
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .btn-primary {
+    padding: var(--space-2) var(--space-6);
+    background: var(--color-primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--font-sm);
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .btn-primary:hover { background: var(--color-primary-dark); }
+</style>
+
+<script>
+(function () {
+  // ── Constantes ────────────────────────────────────────
+  const API_URL = '/api/extraer-primera-pagina';
+  const LS_KEY  = 'edetools_pdfpp_kw';
+
+  // ── DOM refs ──────────────────────────────────────────
+  const fileInput    = document.getElementById('fileInput')    as HTMLInputElement;
+  const grid         = document.getElementById('grid')         as HTMLDivElement;
+  const emptyMsg     = document.getElementById('emptyMsg')     as HTMLDivElement;
+  const countersEl   = document.getElementById('counters')     as HTMLDivElement;
+  const btnProcess   = document.getElementById('btnProcess')   as HTMLButtonElement;
+  const btnSelectAll = document.getElementById('btnSelectAll') as HTMLButtonElement;
+  const btnSelectNone= document.getElementById('btnSelectNone')as HTMLButtonElement;
+  const btnKw        = document.getElementById('btnKw')        as HTMLButtonElement;
+  const logBody      = document.getElementById('logBody')      as HTMLDivElement;
+  const btnLogClear  = document.getElementById('btnLogClear')  as HTMLButtonElement;
+  const modalOverlay = document.getElementById('modalOverlay') as HTMLDivElement;
+  const btnModalClose= document.getElementById('btnModalClose')as HTMLButtonElement;
+  const btnModalSave = document.getElementById('btnModalSave') as HTMLButtonElement;
+  const kwArea       = document.getElementById('kwArea')       as HTMLTextAreaElement;
+
+  // ── Estado ────────────────────────────────────────────
+  type FileEntry = { file: File; name: string; group: string | null; selected: boolean };
+  let files: FileEntry[] = [];
+  let keywords: string[] = [];
+  let processing = false;
+
+  // ── Log ───────────────────────────────────────────────
+  function log(type: 'ok' | 'info' | 'warn' | 'error' | 'sys', msg: string) {
+    const d = document.createElement('div');
+    d.className = `log-line ${type}`;
+    const ts = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    d.textContent = `[${ts}] ${msg}`;
+    logBody.appendChild(d);
+    logBody.scrollTop = logBody.scrollHeight;
+  }
+
+  btnLogClear.addEventListener('click', () => { logBody.innerHTML = ''; });
+
+  // ── Palabras clave ────────────────────────────────────
+  function loadKW() {
+    const raw = localStorage.getItem(LS_KEY) || '';
+    keywords = raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    kwArea.value = raw;
+  }
+
+  function assignGroup(name: string): string | null {
+    const low = name.toLowerCase();
+    for (const kw of keywords) if (kw && low.includes(kw)) return kw;
+    return null;
+  }
+
+  loadKW();
+
+  btnKw.addEventListener('click', () => modalOverlay.classList.add('open'));
+  btnModalClose.addEventListener('click', () => modalOverlay.classList.remove('open'));
+  modalOverlay.addEventListener('click', e => {
+    if (e.target === modalOverlay) modalOverlay.classList.remove('open');
+  });
+
+  btnModalSave.addEventListener('click', () => {
+    const val = kwArea.value.trim();
+    localStorage.setItem(LS_KEY, val);
+    loadKW();
+    files.forEach(f => f.group = assignGroup(f.name));
+    renderCards();
+    updateCounters();
+    modalOverlay.classList.remove('open');
+    log('sys', `Palabras clave guardadas: ${keywords.length}`);
+  });
+
+  // ── Cargar archivos ───────────────────────────────────
+  fileInput.addEventListener('change', e => {
+    const incoming = Array.from((e.target as HTMLInputElement).files!);
+    const existingNames = new Set(files.map(f => f.name));
+    let added = 0;
+    for (const f of incoming) {
+      if (existingNames.has(f.name)) { log('warn', `Ya cargado: ${f.name}`); continue; }
+      files.push({ file: f, name: f.name, group: assignGroup(f.name), selected: true });
+      added++;
+    }
+    log('sys', `${added} archivo(s) agregado(s). Total: ${files.length}`);
+    renderCards();
+    updateCounters();
+    fileInput.value = '';
+  });
+
+  // ── Selección ─────────────────────────────────────────
+  btnSelectAll.addEventListener('click', () => {
+    files.forEach(f => f.selected = true);
+    renderCards(); updateCounters();
+  });
+
+  btnSelectNone.addEventListener('click', () => {
+    files.forEach(f => f.selected = false);
+    renderCards(); updateCounters();
+  });
+
+  // ── Render cards ──────────────────────────────────────
+  function renderCards() {
+    grid.innerHTML = '';
+    emptyMsg.classList.toggle('visible', files.length === 0);
+
+    files.forEach((f, i) => {
+      const card = document.createElement('div');
+      card.className = 'file-card' + (f.selected ? ' selected' : '');
+      card.tabIndex = 0;
+
+      const cb = document.createElement('input');
+      cb.type    = 'checkbox';
+      cb.checked = f.selected;
+
+      const name = document.createElement('p');
+      name.className   = 'card-name';
+      name.textContent = f.name;
+
+      card.appendChild(cb);
+      card.appendChild(name);
+
+      if (f.group) {
+        const tag = document.createElement('span');
+        tag.className   = 'card-tag';
+        tag.textContent = f.group;
+        card.appendChild(tag);
+      }
+
+      const toggle = () => {
+        f.selected = !f.selected;
+        cb.checked = f.selected;
+        card.classList.toggle('selected', f.selected);
+        updateCounters();
+      };
+
+      card.addEventListener('click', e => { if (e.target !== cb) toggle(); });
+      cb.addEventListener('change', () => { f.selected = cb.checked; card.classList.toggle('selected', f.selected); updateCounters(); });
+      card.addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); toggle(); } });
+
+      grid.appendChild(card);
+    });
+  }
+
+  // ── Contadores ────────────────────────────────────────
+  function updateCounters() {
+    const selected    = files.filter(f => f.selected);
+    const notSelected = files.filter(f => !f.selected);
+
+    const gc: Record<string, number> = {};
+    selected.filter(f => f.group).forEach(f => { gc[f.group!] = (gc[f.group!] || 0) + 1; });
+    const noGroup = selected.filter(f => !f.group).length;
+
+    countersEl.innerHTML = '';
+
+    for (const [g, c] of Object.entries(gc)) {
+      const d = document.createElement('div');
+      d.className = 'counter';
+      d.innerHTML = `${g} <strong>${c}</strong>`;
+      countersEl.appendChild(d);
+    }
+
+    if (noGroup > 0) {
+      const d = document.createElement('div');
+      d.className = 'counter';
+      d.innerHTML = `sin grupo <strong>${noGroup}</strong>`;
+      countersEl.appendChild(d);
+    }
+
+    if (notSelected.length > 0) {
+      const d = document.createElement('div');
+      d.className = 'counter';
+      d.innerHTML = `no procesados <strong>${notSelected.length}</strong>`;
+      countersEl.appendChild(d);
+    }
+
+    btnProcess.disabled = selected.length === 0 || processing;
+  }
+
+  // ── Ordenamiento por grupos ───────────────────────────
+  function getSortedSelected(): FileEntry[] {
+    const byGroup: Record<string, FileEntry[]> = {};
+    files.filter(f => f.selected).forEach(f => {
+      const g = f.group || '__none__';
+      if (!byGroup[g]) byGroup[g] = [];
+      byGroup[g].push(f);
+    });
+    const result: FileEntry[] = [];
+    keywords.forEach(kw => { if (byGroup[kw]) result.push(...byGroup[kw]); });
+    if (byGroup['__none__']) result.push(...byGroup['__none__']);
+    return result;
+  }
+
+  // ── Procesar ──────────────────────────────────────────
+  btnProcess.addEventListener('click', async () => {
+    if (processing) return;
+    processing = true;
+    btnProcess.disabled = true;
+
+    const selected    = getSortedSelected();
+    const notSelected = files.filter(f => !f.selected);
+
+    log('sys', `Iniciando: ${selected.length} a procesar, ${notSelected.length} a abrir directamente.`);
+
+    // Los no seleccionados se abren directamente en el navegador (igual que el original)
+    for (const f of notSelected) {
+      const url = URL.createObjectURL(f.file);
+      window.open(url, '_blank');
+      log('info', `Abierto directo: ${f.name}`);
+    }
+
+    // Construir FormData para el Worker
+    const fd = new FormData();
+    const order: string[] = [];
+    for (const f of selected) {
+      fd.append('pdfs[]', f.file, f.name);
+      order.push(f.name);
+    }
+    fd.append('order', JSON.stringify(order));
+
+    log('sys', 'Enviando al servidor…');
+
+    try {
+      const res  = await fetch(API_URL, { method: 'POST', body: fd });
+      const data = await res.json();
+
+      // Mostrar log del servidor
+      if (data.log) {
+        for (const l of data.log) {
+          log(l.type === 'ok' ? 'ok' : l.type, `[Worker] ${l.msg}`);
+        }
+      }
+
+      if (data.error) {
+        log('error', data.error);
+        return;
+      }
+
+      if (data.failed?.length) {
+        log('warn', `No procesados: ${data.failed.join(', ')}`);
+      }
+
+      // Decodificar base64 → Blob → abrir
+      const bin   = atob(data.pdf);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blob  = new Blob([bytes], { type: 'application/pdf' });
+      window.open(URL.createObjectURL(blob), '_blank');
+      log('ok', `PDF resultante abierto. Páginas: ${data.pages}`);
+
+    } catch (err: any) {
+      log('error', `Error de red o servidor: ${err.message}`);
+    } finally {
+      processing = false;
+      updateCounters();
+    }
+  });
+
+  // ── Init ──────────────────────────────────────────────
+  log('sys', 'Listo. Cargá archivos PDF.');
+  updateCounters();
+  emptyMsg.classList.add('visible');
+})();
+</script>

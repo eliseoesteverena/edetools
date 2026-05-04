@@ -1,10 +1,15 @@
 import { defineConfig } from 'astro/config';
+import cloudflare from '@astrojs/cloudflare';
 
 export default defineConfig({
-  // Cloudflare Pages: output static por defecto.
-  // Cuando incorpores Auth0 con SSR, cambiar a:
-  //   output: 'server',
-  //   adapter: cloudflare()
-  output: 'static',
-  site: 'https://edetools.com', // actualizar con el dominio real
+  // output: 'hybrid' permite que la mayoría del sitio sea estático
+  // pero habilita endpoints de servidor (las Functions/Workers)
+  // para las rutas que lo necesiten (como el API de PDF).
+  output: 'hybrid',
+  adapter: cloudflare({
+    platformProxy: {
+      enabled: true, // habilita wrangler en dev local
+    },
+  }),
+  site: 'https://edetools.pages.dev',
 });
