@@ -13,13 +13,17 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   ]}
 >
 
+  <!-- PDF.js desde CDN — solo para el fallback de rasterización en cliente -->
+  <script
+    is:inline
+    src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
+  ></script>
+
   <div class="tool-wrap">
 
     <!-- ── Toolbar ────────────────────────────────────── -->
     <div class="toolbar">
       <div class="toolbar-left">
-
-        <!-- Cargar archivos -->
         <label class="btn-load" for="fileInput">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
@@ -29,31 +33,28 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
           Cargar PDFs
           <input type="file" id="fileInput" accept=".pdf" multiple />
         </label>
-
-        <!-- Seleccionar todo / ninguno -->
-        <button class="btn-secondary" id="btnSelectAll"   type="button">Seleccionar todo</button>
-        <button class="btn-secondary" id="btnSelectNone"  type="button">Ninguno</button>
-
-        <!-- Palabras clave -->
-        <button class="btn-secondary" id="btnKw" type="button">
+        <button class="btn-secondary" id="btnSelectAll"  type="button">Seleccionar todo</button>
+        <button class="btn-secondary" id="btnSelectNone" type="button">Ninguno</button>
+        <button class="btn-secondary" id="btnKw"         type="button">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
           Palabras clave
         </button>
-
       </div>
-
-      <!-- Contadores -->
       <div class="counters" id="counters"></div>
-
-      <!-- Procesar -->
       <button class="btn-process" id="btnProcess" type="button" disabled>
         Procesar
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <polyline points="9 18 15 12 9 6"/>
         </svg>
       </button>
+    </div>
+
+    <!-- ── Barra de progreso ──────────────────────────── -->
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar" id="progressBar"></div>
+      <span class="progress-label" id="progressLabel"></span>
     </div>
 
     <!-- ── Grid de archivos ───────────────────────────── -->
@@ -82,7 +83,7 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
       </div>
       <div class="modal-body">
         <p class="modal-hint">
-          Separadas por coma. Si parte del nombre del archivo coincide, se agrupa y ordena automáticamente al procesar.<br>
+          Separadas por coma. Si parte del nombre coincide, se agrupa y ordena al procesar.<br>
           <em>Ej: factura, recibo, contrato 2024</em>
         </p>
         <textarea id="kwArea" spellcheck="false" placeholder="factura, recibo, nota de crédito"></textarea>
@@ -96,7 +97,6 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 </ToolLayout>
 
 <style>
-  /* ── Layout general ─────────────────────────────── */
   .tool-wrap {
     display: flex;
     flex-direction: column;
@@ -105,13 +105,11 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     border-radius: var(--radius-lg);
     background: var(--color-white);
     overflow: hidden;
-
-    /* La herramienta ocupa el alto disponible en pantalla */
     height: calc(100vh - 220px);
     min-height: 500px;
   }
 
-  /* ── Toolbar ──────────────────────────────────── */
+  /* ── Toolbar ──────────────────────────────────────── */
   .toolbar {
     display: flex;
     align-items: center;
@@ -131,7 +129,6 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     flex: 1;
   }
 
-  /* Botón cargar (label sobre input file) */
   .btn-load {
     display: inline-flex;
     align-items: center;
@@ -145,16 +142,11 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     cursor: pointer;
     white-space: nowrap;
     transition: background 0.2s;
+    position: relative;
   }
 
   .btn-load:hover { background: var(--color-primary-dark); }
-
-  .btn-load input[type="file"] {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
-  }
+  .btn-load input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; }
 
   .btn-secondary {
     display: inline-flex;
@@ -172,10 +164,7 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     transition: border-color 0.2s, color 0.2s;
   }
 
-  .btn-secondary:hover {
-    border-color: var(--color-primary);
-    color: var(--color-primary);
-  }
+  .btn-secondary:hover { border-color: var(--color-primary); color: var(--color-primary); }
 
   .btn-process {
     display: inline-flex;
@@ -197,20 +186,47 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
   .btn-process:hover:not(:disabled)  { background: #c0303b; }
   .btn-process:active:not(:disabled) { transform: scale(0.98); }
+  .btn-process:disabled { background: var(--color-gray-200); color: var(--color-gray-500); cursor: not-allowed; }
 
-  .btn-process:disabled {
-    background: var(--color-gray-200);
-    color: var(--color-gray-500);
-    cursor: not-allowed;
-  }
-
-  /* ── Contadores ──────────────────────────────── */
-  .counters {
-    display: flex;
-    gap: var(--space-1);
-    flex-wrap: wrap;
+  /* ── Progreso ─────────────────────────────────────── */
+  .progress-wrap {
+    height: 28px;
+    flex-shrink: 0;
+    display: none;
     align-items: center;
+    gap: var(--space-3);
+    padding: 0 var(--space-4);
+    background: var(--color-gray-50);
+    border-bottom: 1px solid var(--color-gray-200);
   }
+
+  .progress-wrap.visible { display: flex; }
+
+  .progress-bar-track {
+    flex: 1;
+    height: 4px;
+    background: var(--color-gray-200);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--color-primary);
+    border-radius: 2px;
+    transition: width 0.2s;
+  }
+
+  .progress-label {
+    font-size: var(--font-xs);
+    color: var(--color-gray-500);
+    white-space: nowrap;
+    min-width: 120px;
+  }
+
+  /* ── Contadores ──────────────────────────────────── */
+  .counters { display: flex; gap: var(--space-1); flex-wrap: wrap; align-items: center; }
 
   .counter {
     font-size: var(--font-xs);
@@ -224,12 +240,8 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
   .counter strong { color: var(--color-gray-900); font-weight: 600; }
 
-  /* ── Grid de archivos ────────────────────────── */
-  .grid-wrap {
-    flex: 1;
-    overflow-y: auto;
-    padding: var(--space-4);
-  }
+  /* ── Grid ──────────────────────────────────────── */
+  .grid-wrap { flex: 1; overflow-y: auto; padding: var(--space-4); }
 
   .grid {
     display: grid;
@@ -247,7 +259,6 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
   .empty-msg.visible { display: block; }
 
-  /* Cards de archivo */
   .file-card {
     border: 1px solid var(--color-gray-200);
     border-radius: var(--radius-md);
@@ -259,23 +270,18 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     transition: border-color 0.15s, background 0.15s;
   }
 
-  .file-card:hover   { border-color: var(--color-primary); }
-  .file-card.selected {
-    border-color: var(--color-primary);
-    background: var(--color-primary-light);
-  }
+  .file-card:hover    { border-color: var(--color-primary); }
+  .file-card.selected { border-color: var(--color-primary); background: var(--color-primary-light); }
 
   .file-card input[type="checkbox"] {
     position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 15px;
-    height: 15px;
+    top: 8px; right: 8px;
+    width: 15px; height: 15px;
     accent-color: var(--color-primary);
     cursor: pointer;
   }
 
-  .file-card .card-name {
+  .card-name {
     font-size: var(--font-xs);
     word-break: break-all;
     padding-right: 18px;
@@ -284,7 +290,7 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     margin-bottom: 0;
   }
 
-  .file-card .card-tag {
+  .card-tag {
     display: inline-block;
     margin-top: var(--space-1);
     font-size: 0.6rem;
@@ -297,7 +303,7 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     letter-spacing: 0.05em;
   }
 
-  /* ── Log ─────────────────────────────────────── */
+  /* ── Log ──────────────────────────────────────────── */
   .log-panel {
     border-top: 1px solid var(--color-gray-200);
     height: 130px;
@@ -333,13 +339,9 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     padding: 2px var(--space-2);
     border-radius: var(--radius-sm);
     font-family: inherit;
-    transition: background 0.15s;
   }
 
-  .btn-log-clear:hover {
-    background: var(--color-gray-200);
-    color: var(--color-gray-900);
-  }
+  .btn-log-clear:hover { background: var(--color-gray-200); color: var(--color-gray-900); }
 
   .log-body {
     flex: 1;
@@ -350,148 +352,70 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     gap: 1px;
   }
 
-  .log-line {
-    font-size: var(--font-xs);
-    font-family: monospace;
-    line-height: 1.6;
-    color: var(--color-gray-700);
-  }
-
+  .log-line { font-size: var(--font-xs); font-family: monospace; line-height: 1.6; color: var(--color-gray-700); }
   .log-line.ok    { color: #166534; }
   .log-line.error { color: var(--color-accent); }
   .log-line.warn  { color: #92400e; }
   .log-line.info  { color: var(--color-gray-500); }
 
-  /* ── Modal ───────────────────────────────────── */
-  .modal-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.45);
-    z-index: 200;
-    align-items: center;
-    justify-content: center;
-  }
+  /* ── Modal ────────────────────────────────────────── */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 200; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
 
-  .modal-overlay.open {
-    display: flex;
-  }
+  .modal-box { background: var(--color-white); border-radius: var(--radius-lg); width: min(420px, 90vw); display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
 
-  .modal-box {
-    background: var(--color-white);
-    border-radius: var(--radius-lg);
-    width: min(420px, 90vw);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-  }
-
-  .modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--space-4) var(--space-6);
-    border-bottom: 1px solid var(--color-gray-200);
-  }
-
-  .modal-title {
-    font-size: var(--font-base);
-    font-weight: 600;
-    margin-bottom: 0;
-  }
-
-  .modal-close {
-    background: none;
-    border: none;
-    font-size: 1.4rem;
-    line-height: 1;
-    color: var(--color-gray-500);
-    cursor: pointer;
-    padding: 0 var(--space-1);
-    font-family: inherit;
-  }
-
+  .modal-header { display: flex; align-items: center; justify-content: space-between; padding: var(--space-4) var(--space-6); border-bottom: 1px solid var(--color-gray-200); }
+  .modal-title  { font-size: var(--font-base); font-weight: 600; margin-bottom: 0; }
+  .modal-close  { background: none; border: none; font-size: 1.4rem; line-height: 1; color: var(--color-gray-500); cursor: pointer; padding: 0 var(--space-1); font-family: inherit; }
   .modal-close:hover { color: var(--color-gray-900); background: none; }
 
-  .modal-body {
-    padding: var(--space-4) var(--space-6);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
+  .modal-body { padding: var(--space-4) var(--space-6); display: flex; flex-direction: column; gap: var(--space-3); }
+  .modal-hint { font-size: var(--font-xs); color: var(--color-gray-500); line-height: 1.7; margin-bottom: 0; }
 
-  .modal-hint {
-    font-size: var(--font-xs);
-    color: var(--color-gray-500);
-    line-height: 1.7;
-    margin-bottom: 0;
-  }
+  #kwArea { width: 100%; min-height: 80px; resize: vertical; font-family: monospace; font-size: var(--font-sm); padding: var(--space-2) var(--space-3); border: 1px solid var(--color-gray-200); border-radius: var(--radius-md); }
 
-  #kwArea {
-    width: 100%;
-    min-height: 80px;
-    resize: vertical;
-    font-family: monospace;
-    font-size: var(--font-sm);
-    padding: var(--space-2) var(--space-3);
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-md);
-  }
+  .modal-footer { padding: var(--space-3) var(--space-6); border-top: 1px solid var(--color-gray-200); display: flex; justify-content: flex-end; }
 
-  .modal-footer {
-    padding: var(--space-3) var(--space-6);
-    border-top: 1px solid var(--color-gray-200);
-    display: flex;
-    justify-content: flex-end;
-  }
-
-  .btn-primary {
-    padding: var(--space-2) var(--space-6);
-    background: var(--color-primary);
-    color: #fff;
-    border: none;
-    border-radius: var(--radius-md);
-    font-size: var(--font-sm);
-    font-weight: 500;
-    font-family: inherit;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-
+  .btn-primary { padding: var(--space-2) var(--space-6); background: var(--color-primary); color: #fff; border: none; border-radius: var(--radius-md); font-size: var(--font-sm); font-weight: 500; font-family: inherit; cursor: pointer; transition: background 0.2s; }
   .btn-primary:hover { background: var(--color-primary-dark); }
 </style>
 
 <script>
 (function () {
-  // ── Constantes ────────────────────────────────────────
   const API_URL = '/api/extraer-primera-pagina';
   const LS_KEY  = 'edetools_pdfpp_kw';
 
-  // ── DOM refs ──────────────────────────────────────────
-  const fileInput    = document.getElementById('fileInput')    as HTMLInputElement;
-  const grid         = document.getElementById('grid')         as HTMLDivElement;
-  const emptyMsg     = document.getElementById('emptyMsg')     as HTMLDivElement;
-  const countersEl   = document.getElementById('counters')     as HTMLDivElement;
-  const btnProcess   = document.getElementById('btnProcess')   as HTMLButtonElement;
-  const btnSelectAll = document.getElementById('btnSelectAll') as HTMLButtonElement;
-  const btnSelectNone= document.getElementById('btnSelectNone')as HTMLButtonElement;
-  const btnKw        = document.getElementById('btnKw')        as HTMLButtonElement;
-  const logBody      = document.getElementById('logBody')      as HTMLDivElement;
-  const btnLogClear  = document.getElementById('btnLogClear')  as HTMLButtonElement;
-  const modalOverlay = document.getElementById('modalOverlay') as HTMLDivElement;
-  const btnModalClose= document.getElementById('btnModalClose')as HTMLButtonElement;
-  const btnModalSave = document.getElementById('btnModalSave') as HTMLButtonElement;
-  const kwArea       = document.getElementById('kwArea')       as HTMLTextAreaElement;
+  // PDF.js worker
+  // @ts-ignore
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-  // ── Estado ────────────────────────────────────────────
+  // ── DOM ───────────────────────────────────────────────
+  const fileInput     = document.getElementById('fileInput')     as HTMLInputElement;
+  const grid          = document.getElementById('grid')          as HTMLDivElement;
+  const emptyMsg      = document.getElementById('emptyMsg')      as HTMLDivElement;
+  const countersEl    = document.getElementById('counters')      as HTMLDivElement;
+  const btnProcess    = document.getElementById('btnProcess')    as HTMLButtonElement;
+  const btnSelectAll  = document.getElementById('btnSelectAll')  as HTMLButtonElement;
+  const btnSelectNone = document.getElementById('btnSelectNone') as HTMLButtonElement;
+  const btnKw         = document.getElementById('btnKw')         as HTMLButtonElement;
+  const logBody       = document.getElementById('logBody')       as HTMLDivElement;
+  const btnLogClear   = document.getElementById('btnLogClear')   as HTMLButtonElement;
+  const modalOverlay  = document.getElementById('modalOverlay')  as HTMLDivElement;
+  const btnModalClose = document.getElementById('btnModalClose') as HTMLButtonElement;
+  const btnModalSave  = document.getElementById('btnModalSave')  as HTMLButtonElement;
+  const kwArea        = document.getElementById('kwArea')        as HTMLTextAreaElement;
+  const progressWrap  = document.getElementById('progressWrap')  as HTMLDivElement;
+  const progressBar   = document.getElementById('progressBar')   as HTMLDivElement;
+  const progressLabel = document.getElementById('progressLabel') as HTMLSpanElement;
+
   type FileEntry = { file: File; name: string; group: string | null; selected: boolean };
   let files: FileEntry[] = [];
   let keywords: string[] = [];
   let processing = false;
 
   // ── Log ───────────────────────────────────────────────
-  function log(type: 'ok' | 'info' | 'warn' | 'error' | 'sys', msg: string) {
+  function log(type: string, msg: string) {
     const d = document.createElement('div');
     d.className = `log-line ${type}`;
     const ts = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -502,10 +426,17 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
   btnLogClear.addEventListener('click', () => { logBody.innerHTML = ''; });
 
+  // ── Progreso ──────────────────────────────────────────
+  function setProgress(pct: number, label: string) {
+    progressWrap.classList.toggle('visible', pct >= 0);
+    progressBar.style.width = pct + '%';
+    progressLabel.textContent = label;
+  }
+
   // ── Palabras clave ────────────────────────────────────
   function loadKW() {
     const raw = localStorage.getItem(LS_KEY) || '';
-    keywords = raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+    keywords  = raw.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
     kwArea.value = raw;
   }
 
@@ -516,90 +447,68 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   }
 
   loadKW();
-
-  btnKw.addEventListener('click', () => modalOverlay.classList.add('open'));
-  btnModalClose.addEventListener('click', () => modalOverlay.classList.remove('open'));
-  modalOverlay.addEventListener('click', e => {
-    if (e.target === modalOverlay) modalOverlay.classList.remove('open');
-  });
+  btnKw.addEventListener('click',       () => modalOverlay.classList.add('open'));
+  btnModalClose.addEventListener('click',() => modalOverlay.classList.remove('open'));
+  modalOverlay.addEventListener('click', e => { if (e.target === modalOverlay) modalOverlay.classList.remove('open'); });
 
   btnModalSave.addEventListener('click', () => {
     const val = kwArea.value.trim();
     localStorage.setItem(LS_KEY, val);
     loadKW();
     files.forEach(f => f.group = assignGroup(f.name));
-    renderCards();
-    updateCounters();
+    renderCards(); updateCounters();
     modalOverlay.classList.remove('open');
-    log('sys', `Palabras clave guardadas: ${keywords.length}`);
+    log('sys', `Palabras clave: ${keywords.length}`);
   });
 
-  // ── Cargar archivos ───────────────────────────────────
+  // ── Archivos ──────────────────────────────────────────
   fileInput.addEventListener('change', e => {
     const incoming = Array.from((e.target as HTMLInputElement).files!);
-    const existingNames = new Set(files.map(f => f.name));
+    const existing = new Set(files.map(f => f.name));
     let added = 0;
     for (const f of incoming) {
-      if (existingNames.has(f.name)) { log('warn', `Ya cargado: ${f.name}`); continue; }
+      if (existing.has(f.name)) { log('warn', `Ya cargado: ${f.name}`); continue; }
       files.push({ file: f, name: f.name, group: assignGroup(f.name), selected: true });
       added++;
     }
     log('sys', `${added} archivo(s) agregado(s). Total: ${files.length}`);
-    renderCards();
-    updateCounters();
+    renderCards(); updateCounters();
     fileInput.value = '';
   });
 
-  // ── Selección ─────────────────────────────────────────
-  btnSelectAll.addEventListener('click', () => {
-    files.forEach(f => f.selected = true);
-    renderCards(); updateCounters();
-  });
+  btnSelectAll.addEventListener('click',  () => { files.forEach(f => f.selected = true);  renderCards(); updateCounters(); });
+  btnSelectNone.addEventListener('click', () => { files.forEach(f => f.selected = false); renderCards(); updateCounters(); });
 
-  btnSelectNone.addEventListener('click', () => {
-    files.forEach(f => f.selected = false);
-    renderCards(); updateCounters();
-  });
-
-  // ── Render cards ──────────────────────────────────────
+  // ── Render ────────────────────────────────────────────
   function renderCards() {
     grid.innerHTML = '';
     emptyMsg.classList.toggle('visible', files.length === 0);
-
-    files.forEach((f, i) => {
+    files.forEach(f => {
       const card = document.createElement('div');
       card.className = 'file-card' + (f.selected ? ' selected' : '');
       card.tabIndex = 0;
 
       const cb = document.createElement('input');
-      cb.type    = 'checkbox';
-      cb.checked = f.selected;
+      cb.type = 'checkbox'; cb.checked = f.selected;
 
       const name = document.createElement('p');
-      name.className   = 'card-name';
-      name.textContent = f.name;
+      name.className = 'card-name'; name.textContent = f.name;
 
-      card.appendChild(cb);
-      card.appendChild(name);
-
+      card.appendChild(cb); card.appendChild(name);
       if (f.group) {
         const tag = document.createElement('span');
-        tag.className   = 'card-tag';
-        tag.textContent = f.group;
+        tag.className = 'card-tag'; tag.textContent = f.group;
         card.appendChild(tag);
       }
 
       const toggle = () => {
-        f.selected = !f.selected;
-        cb.checked = f.selected;
-        card.classList.toggle('selected', f.selected);
-        updateCounters();
+        f.selected = !f.selected; cb.checked = f.selected;
+        card.classList.toggle('selected', f.selected); updateCounters();
       };
 
-      card.addEventListener('click', e => { if (e.target !== cb) toggle(); });
-      cb.addEventListener('change', () => { f.selected = cb.checked; card.classList.toggle('selected', f.selected); updateCounters(); });
+      card.addEventListener('click',   e => { if (e.target !== cb) toggle(); });
+      cb.addEventListener('change',    () => { f.selected = cb.checked; card.classList.toggle('selected', f.selected); updateCounters(); });
       card.addEventListener('keydown', e => { if (e.code === 'Space') { e.preventDefault(); toggle(); } });
-
       grid.appendChild(card);
     });
   }
@@ -608,38 +517,29 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   function updateCounters() {
     const selected    = files.filter(f => f.selected);
     const notSelected = files.filter(f => !f.selected);
-
     const gc: Record<string, number> = {};
     selected.filter(f => f.group).forEach(f => { gc[f.group!] = (gc[f.group!] || 0) + 1; });
     const noGroup = selected.filter(f => !f.group).length;
 
     countersEl.innerHTML = '';
-
     for (const [g, c] of Object.entries(gc)) {
       const d = document.createElement('div');
-      d.className = 'counter';
-      d.innerHTML = `${g} <strong>${c}</strong>`;
+      d.className = 'counter'; d.innerHTML = `${g} <strong>${c}</strong>`;
       countersEl.appendChild(d);
     }
-
     if (noGroup > 0) {
       const d = document.createElement('div');
-      d.className = 'counter';
-      d.innerHTML = `sin grupo <strong>${noGroup}</strong>`;
+      d.className = 'counter'; d.innerHTML = `sin grupo <strong>${noGroup}</strong>`;
       countersEl.appendChild(d);
     }
-
     if (notSelected.length > 0) {
       const d = document.createElement('div');
-      d.className = 'counter';
-      d.innerHTML = `no procesados <strong>${notSelected.length}</strong>`;
+      d.className = 'counter'; d.innerHTML = `no procesados <strong>${notSelected.length}</strong>`;
       countersEl.appendChild(d);
     }
-
     btnProcess.disabled = selected.length === 0 || processing;
   }
 
-  // ── Ordenamiento por grupos ───────────────────────────
   function getSortedSelected(): FileEntry[] {
     const byGroup: Record<string, FileEntry[]> = {};
     files.filter(f => f.selected).forEach(f => {
@@ -653,7 +553,40 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     return result;
   }
 
-  // ── Procesar ──────────────────────────────────────────
+  // ── Rasterizar un PDF en el cliente con PDF.js ────────
+  // Se llama solo para los archivos que el Worker no pudo procesar con pdf-lib.
+  async function rasterizarPdf(b64: string, name: string): Promise<Uint8Array | null> {
+    try {
+      const bin   = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+
+      // @ts-ignore
+      const pdfDoc = await pdfjsLib.getDocument({ data: bytes }).promise;
+      const page   = await pdfDoc.getPage(1);
+
+      const scale    = 150 / 72;
+      const viewport = page.getViewport({ scale });
+
+      const canvas  = document.createElement('canvas');
+      canvas.width  = Math.round(viewport.width);
+      canvas.height = Math.round(viewport.height);
+      const ctx = canvas.getContext('2d')!;
+
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      return await new Promise<Uint8Array>(resolve => {
+        canvas.toBlob(blob => {
+          blob!.arrayBuffer().then(ab => resolve(new Uint8Array(ab)));
+        }, 'image/png');
+      });
+    } catch (e: any) {
+      log('error', `Rasterización falló: ${name} — ${e.message}`);
+      return null;
+    }
+  }
+
+  // ── Proceso principal ─────────────────────────────────
   btnProcess.addEventListener('click', async () => {
     if (processing) return;
     processing = true;
@@ -664,59 +597,100 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
     log('sys', `Iniciando: ${selected.length} a procesar, ${notSelected.length} a abrir directamente.`);
 
-    // Los no seleccionados se abren directamente en el navegador (igual que el original)
+    // Los no-seleccionados se abren directamente
     for (const f of notSelected) {
-      const url = URL.createObjectURL(f.file);
-      window.open(url, '_blank');
+      window.open(URL.createObjectURL(f.file), '_blank');
       log('info', `Abierto directo: ${f.name}`);
     }
 
-    // Construir FormData para el Worker
-    const fd = new FormData();
+    // ── Paso 1: enviar al Worker (extracción con pdf-lib) ──
+    setProgress(10, 'Enviando al servidor…');
+
+    const fd    = new FormData();
     const order: string[] = [];
+    fd.append('mode', 'extract');
     for (const f of selected) {
       fd.append('pdfs[]', f.file, f.name);
       order.push(f.name);
     }
     fd.append('order', JSON.stringify(order));
 
-    log('sys', 'Enviando al servidor…');
-
+    let extractData: any;
     try {
       const res  = await fetch(API_URL, { method: 'POST', body: fd });
-      const data = await res.json();
-
-      // Mostrar log del servidor
-      if (data.log) {
-        for (const l of data.log) {
-          log(l.type === 'ok' ? 'ok' : l.type, `[Worker] ${l.msg}`);
-        }
-      }
-
-      if (data.error) {
-        log('error', data.error);
-        return;
-      }
-
-      if (data.failed?.length) {
-        log('warn', `No procesados: ${data.failed.join(', ')}`);
-      }
-
-      // Decodificar base64 → Blob → abrir
-      const bin   = atob(data.pdf);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const blob  = new Blob([bytes], { type: 'application/pdf' });
-      window.open(URL.createObjectURL(blob), '_blank');
-      log('ok', `PDF resultante abierto. Páginas: ${data.pages}`);
-
-    } catch (err: any) {
-      log('error', `Error de red o servidor: ${err.message}`);
-    } finally {
-      processing = false;
-      updateCounters();
+      extractData = await res.json();
+    } catch (e: any) {
+      log('error', `Error de red: ${e.message}`);
+      processing = false; updateCounters(); setProgress(-1, ''); return;
     }
+
+    if (extractData.log) extractData.log.forEach((l: any) => log(l.type, `[Worker] ${l.msg}`));
+    if (extractData.error) {
+      log('error', extractData.error);
+      processing = false; updateCounters(); setProgress(-1, ''); return;
+    }
+
+    setProgress(50, 'Extracción completada.');
+
+    // ── Paso 2: rasterizar en cliente los PDFs que fallaron ──
+    const failed: { name: string; data: string }[] = extractData.failed || [];
+
+    if (failed.length === 0) {
+      // No hay fallback necesario — decodificar y abrir directamente
+      log('ok', `Todos procesados con pdf-lib. Páginas: ${extractData.page_order?.length ?? '?'}`);
+      abrirB64(extractData.pdf_parcial);
+      processing = false; updateCounters(); setProgress(-1, ''); return;
+    }
+
+    log('info', `${failed.length} archivo(s) requieren rasterización en cliente…`);
+
+    const rasterResults = new Map<string, Uint8Array>();
+    for (let i = 0; i < failed.length; i++) {
+      const { name, data } = failed[i];
+      setProgress(50 + Math.round((i / failed.length) * 35), `Rasterizando: ${name}`);
+      log('info', `Rasterizando: ${name}`);
+      const png = await rasterizarPdf(data, name);
+      if (png) { rasterResults.set(name, png); log('ok', `Rasterizado: ${name}`); }
+    }
+
+    setProgress(88, 'Enviando imágenes al servidor…');
+
+    // ── Paso 3: merge — enviar imágenes al Worker para PDF final ──
+    const fd2 = new FormData();
+    fd2.append('mode', 'merge');
+    fd2.append('pdf_parcial', extractData.pdf_parcial);
+    fd2.append('page_order',  JSON.stringify(extractData.page_order));
+
+    for (const [name, pngBytes] of rasterResults.entries()) {
+      fd2.append(`raster_${name}`, new Blob([pngBytes], { type: 'image/png' }), name);
+    }
+
+    let mergeData: any;
+    try {
+      const res2 = await fetch(API_URL, { method: 'POST', body: fd2 });
+      mergeData  = await res2.json();
+    } catch (e: any) {
+      log('error', `Error en merge: ${e.message}`);
+      processing = false; updateCounters(); setProgress(-1, ''); return;
+    }
+
+    if (mergeData.log) mergeData.log.forEach((l: any) => log(l.type, `[Worker] ${l.msg}`));
+    if (mergeData.error) { log('error', mergeData.error); processing = false; updateCounters(); setProgress(-1, ''); return; }
+
+    setProgress(100, 'Listo.');
+    log('ok', `PDF final listo. Páginas: ${mergeData.pages}`);
+    abrirB64(mergeData.pdf);
+
+    setTimeout(() => { processing = false; updateCounters(); setProgress(-1, ''); }, 800);
   });
+
+  function abrirB64(b64: string) {
+    const bin   = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const blob  = new Blob([bytes], { type: 'application/pdf' });
+    window.open(URL.createObjectURL(blob), '_blank');
+  }
 
   // ── Init ──────────────────────────────────────────────
   log('sys', 'Listo. Cargá archivos PDF.');

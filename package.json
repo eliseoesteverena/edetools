@@ -10,7 +10,6 @@
   "dependencies": {
     "astro": "^4.15.0",
     "@astrojs/cloudflare": "^11.0.0",
-    "pdf-lib": "^1.17.1",
-    "mupdf": "^0.1.2"
+    "pdf-lib": "^1.17.1"
   }
 }
