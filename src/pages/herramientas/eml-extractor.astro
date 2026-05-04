@@ -1,0 +1,610 @@
+---
+// src/pages/herramientas/eml-extractor.astro
+import ToolLayout from '../../layouts/ToolLayout.astro';
+---
+
+<ToolLayout
+  title="Extractor de EMLs"
+  description="Cargá un .zip con archivos .eml y extraé todos los adjuntos e imágenes embebidas en un único archivo .zip listo para descargar."
+  icon="📧"
+  tags={[
+    { label: 'eml', type: 'email' },
+    { label: 'client-side', type: 'web' },
+  ]}
+>
+
+  <!-- JSZip desde CDN -->
+  <script
+    is:inline
+    src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"
+  ></script>
+
+  <div class="tool-wrap">
+
+    <!-- Drop zone -->
+    <div class="dropzone" id="dropzone">
+      <input type="file" id="fileInput" accept=".zip" />
+      <span class="drop-icon" aria-hidden="true">📁</span>
+      <p class="drop-text">
+        <strong>Seleccioná o arrastrá tu archivo .zip</strong><br />
+        con los .eml exportados
+      </p>
+      <p class="drop-filename" id="filename"></p>
+    </div>
+
+    <!-- Barra de progreso -->
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-bar" id="progressBar"></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats" id="stats">
+      <div class="stat-item">
+        <div class="stat-value" id="statMails">0</div>
+        <div class="stat-label">Mails</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="statFiles">0</div>
+        <div class="stat-label">Archivos</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="statErrors">0</div>
+        <div class="stat-label">Errores</div>
+      </div>
+    </div>
+
+    <!-- Acciones -->
+    <div class="actions">
+      <button class="btn-process" id="processBtn" type="button" disabled>
+        Procesar
+      </button>
+      <a class="btn-download" id="downloadBtn" href="#" style="display:none">
+        ↓ Descargar ZIP
+      </a>
+    </div>
+
+    <!-- Log -->
+    <div class="log" id="log" hidden></div>
+
+  </div>
+
+</ToolLayout>
+
+<style>
+  .tool-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    max-width: 44rem;
+  }
+
+  /* ── Drop zone ─────────────────────────────────────── */
+  .dropzone {
+    position: relative;
+    border: 2px dashed var(--color-gray-200);
+    border-radius: var(--radius-lg);
+    padding: var(--space-8) var(--space-6);
+    text-align: center;
+    cursor: pointer;
+    background: var(--color-white);
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .dropzone:hover,
+  .dropzone.drag-over {
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
+  }
+
+  .dropzone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .drop-icon {
+    font-size: 2rem;
+    display: block;
+    margin-bottom: var(--space-2);
+  }
+
+  .drop-text {
+    font-size: var(--font-base);
+    color: var(--color-gray-700);
+    line-height: 1.6;
+    margin-bottom: var(--space-1);
+  }
+
+  .drop-filename {
+    font-size: var(--font-xs);
+    color: var(--color-primary);
+    font-family: monospace;
+    margin-bottom: 0;
+    min-height: 1.2em;
+  }
+
+  /* ── Progress ──────────────────────────────────────── */
+  .progress-wrap {
+    height: 4px;
+    background: var(--color-gray-200);
+    border-radius: 2px;
+    overflow: hidden;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .progress-wrap.visible { opacity: 1; }
+
+  .progress-bar {
+    height: 100%;
+    background: var(--color-primary);
+    width: 0%;
+    transition: width 0.2s;
+  }
+
+  /* ── Stats ─────────────────────────────────────────── */
+  .stats {
+    display: none;
+    gap: var(--space-6);
+    flex-wrap: wrap;
+    background: var(--color-white);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4) var(--space-6);
+  }
+
+  .stats.visible { display: flex; }
+
+  .stat-item { display: flex; flex-direction: column; gap: 2px; }
+
+  .stat-value {
+    font-size: var(--font-3xl);
+    font-weight: 700;
+    color: var(--color-primary);
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-size: var(--font-xs);
+    color: var(--color-gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  /* ── Actions ───────────────────────────────────────── */
+  .actions {
+    display: flex;
+    gap: var(--space-3);
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .btn-process {
+    padding: var(--space-2) var(--space-6);
+    background: var(--color-primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--font-base);
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.2s, transform 0.1s;
+  }
+
+  .btn-process:hover:not(:disabled) { background: var(--color-primary-dark); }
+  .btn-process:active:not(:disabled) { transform: scale(0.98); }
+
+  .btn-process:disabled {
+    background: var(--color-gray-200);
+    color: var(--color-gray-500);
+    cursor: not-allowed;
+  }
+
+  .btn-download {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-6);
+    background: #166534;
+    color: #fff;
+    border-radius: var(--radius-md);
+    font-size: var(--font-base);
+    font-weight: 500;
+    text-decoration: none;
+    transition: background 0.2s, transform 0.1s;
+  }
+
+  .btn-download:hover { background: #14532d; color: #fff; text-decoration: none; }
+  .btn-download:active { transform: scale(0.98); }
+
+  /* ── Log ───────────────────────────────────────────── */
+  .log {
+    background: var(--color-white);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4) var(--space-6);
+    font-family: monospace;
+    font-size: var(--font-xs);
+    line-height: 1.8;
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .log-line { display: flex; gap: var(--space-2); }
+  .log-num  { color: var(--color-gray-200); min-width: 2rem; text-align: right; user-select: none; }
+  .log-msg  { color: var(--color-gray-700); }
+
+  .log-line.is-success .log-msg { color: #166534; }
+  .log-line.is-error   .log-msg { color: var(--color-accent); }
+  .log-line.is-info    .log-msg { color: var(--color-gray-500); }
+</style>
+
+<script>
+(function () {
+  // ── Referencias ──────────────────────────────────────
+  const fileInput    = document.getElementById('fileInput')    as HTMLInputElement;
+  const dropzone     = document.getElementById('dropzone')     as HTMLDivElement;
+  const filenameEl   = document.getElementById('filename')     as HTMLParagraphElement;
+  const processBtn   = document.getElementById('processBtn')   as HTMLButtonElement;
+  const downloadBtn  = document.getElementById('downloadBtn')  as HTMLAnchorElement;
+  const logEl        = document.getElementById('log')          as HTMLDivElement;
+  const progressWrap = document.getElementById('progressWrap') as HTMLDivElement;
+  const progressBar  = document.getElementById('progressBar')  as HTMLDivElement;
+  const statsEl      = document.getElementById('stats')        as HTMLDivElement;
+
+  let selectedFile: File | null = null;
+  let logLineCount = 0;
+
+  // ── Drag & drop ──────────────────────────────────────
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files?.[0]) setFile(fileInput.files[0]);
+  });
+
+  dropzone.addEventListener('dragover',  e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
+  dropzone.addEventListener('dragleave', ()  => dropzone.classList.remove('drag-over'));
+  dropzone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropzone.classList.remove('drag-over');
+    if (e.dataTransfer?.files[0]) setFile(e.dataTransfer.files[0]);
+  });
+
+  function setFile(f: File) {
+    selectedFile = f;
+    filenameEl.textContent = f.name;
+    processBtn.disabled = false;
+    downloadBtn.style.display = 'none';
+    logEl.innerHTML = '';
+    logEl.hidden = true;
+    statsEl.className = 'stats';
+    progressWrap.className = 'progress-wrap';
+    logLineCount = 0;
+  }
+
+  // ── Log helper ───────────────────────────────────────
+  function log(msg: string, type: 'success' | 'error' | 'info' | '' = '') {
+    logLineCount++;
+    logEl.hidden = false;
+    const d = document.createElement('div');
+    d.className = `log-line${type ? ' is-' + type : ''}`;
+    d.innerHTML = `
+      <span class="log-num">${String(logLineCount).padStart(3, '0')}</span>
+      <span class="log-msg">${msg}</span>`;
+    logEl.appendChild(d);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  // ── Procesar ─────────────────────────────────────────
+  processBtn.addEventListener('click', async () => {
+    if (selectedFile) await processZip(selectedFile);
+  });
+
+  async function processZip(file: File) {
+    processBtn.disabled = true;
+    downloadBtn.style.display = 'none';
+    logEl.innerHTML = '';
+    logEl.hidden = false;
+    logLineCount = 0;
+    progressWrap.className = 'progress-wrap visible';
+    progressBar.style.width = '0%';
+    statsEl.className = 'stats';
+
+    log(`Leyendo ${file.name}...`, 'info');
+
+    let inputZip: any;
+    try {
+      // @ts-ignore
+      inputZip = await JSZip.loadAsync(file);
+    } catch (e: any) {
+      log(`Error al abrir el ZIP: ${e.message}`, 'error');
+      processBtn.disabled = false;
+      return;
+    }
+
+    const emlFiles: [string, any][] = Object.entries(inputZip.files)
+      .filter(([n, f]: any) => !f.dir && n.toLowerCase().endsWith('.eml')) as any;
+
+    if (!emlFiles.length) {
+      log('No se encontraron archivos .eml.', 'error');
+      processBtn.disabled = false;
+      return;
+    }
+
+    log(`${emlFiles.length} archivo(s) .eml encontrado(s).`, 'info');
+
+    // @ts-ignore
+    const outputZip = new JSZip();
+    let totalFiles = 0, totalErrors = 0;
+    const usedNames = new Set<string>();
+
+    for (let idx = 0; idx < emlFiles.length; idx++) {
+      const [name, zipEntry] = emlFiles[idx];
+      const prefix    = String(idx + 1).padStart(3, '0');
+      const shortName = name.split('/').pop() || name;
+      progressBar.style.width = `${Math.round((idx / emlFiles.length) * 100)}%`;
+
+      let ab: ArrayBuffer;
+      try {
+        ab = await zipEntry.async('arraybuffer');
+      } catch (e: any) {
+        log(`[${prefix}] ${shortName} — error al leer: ${e.message}`, 'error');
+        totalErrors++;
+        continue;
+      }
+
+      let attachments: Attachment[];
+      try {
+        attachments = parseEML(ab);
+      } catch (e: any) {
+        log(`[${prefix}] ${shortName} — error al parsear: ${e.message}`, 'error');
+        totalErrors++;
+        continue;
+      }
+
+      if (!attachments.length) {
+        log(`[${prefix}] ${shortName} — sin adjuntos`, 'info');
+        continue;
+      }
+
+      for (const att of attachments) {
+        let outName = `${prefix}_${att.filename}`;
+        if (usedNames.has(outName)) {
+          const dot  = outName.lastIndexOf('.');
+          const base = dot > 0 ? outName.slice(0, dot) : outName;
+          const ext  = dot > 0 ? outName.slice(dot) : '';
+          let c = 2;
+          while (usedNames.has(`${base}_${c}${ext}`)) c++;
+          outName = `${base}_${c}${ext}`;
+        }
+        usedNames.add(outName);
+        outputZip.file(outName, att.data);
+        log(`[${prefix}] ${shortName} → ${outName}`, 'success');
+        totalFiles++;
+      }
+    }
+
+    progressBar.style.width = '100%';
+    (document.getElementById('statMails') as HTMLElement).textContent  = String(emlFiles.length);
+    (document.getElementById('statFiles') as HTMLElement).textContent  = String(totalFiles);
+    (document.getElementById('statErrors') as HTMLElement).textContent = String(totalErrors);
+    statsEl.className = 'stats visible';
+
+    if (!totalFiles) {
+      log('No se extrajeron archivos.', 'error');
+      processBtn.disabled = false;
+      return;
+    }
+
+    log('Generando ZIP de salida...', 'info');
+    const blob = await outputZip.generateAsync({ type: 'blob' });
+    downloadBtn.href = URL.createObjectURL(blob);
+    downloadBtn.download = 'adjuntos_extraidos.zip';
+    downloadBtn.style.display = 'inline-flex';
+    log(`Listo. ${totalFiles} archivo(s) extraído(s).`, 'success');
+    processBtn.disabled = false;
+  }
+
+  // ══════════════════════════════════════════════════════
+  // Parser de EML — lógica original conservada
+  // ══════════════════════════════════════════════════════
+  interface Attachment { filename: string; mimeType: string; data: Uint8Array; }
+
+  function decodeRFC2047(str: string): string {
+    if (!str || !str.includes('=?')) return str;
+    str = str.replace(/\?=[ \t]+=\?/g, '?==?');
+    return str.replace(/=\?([^?]+)\?([BQbq])\?([^?]*)\?=/g, (_, charset, enc, text) => {
+      try {
+        let bytes: Uint8Array;
+        if (enc.toUpperCase() === 'B') {
+          const bin = atob(text);
+          bytes = new Uint8Array(bin.length);
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        } else {
+          const s = text.replace(/_/g, ' ');
+          const arr: number[] = [];
+          for (let i = 0; i < s.length;) {
+            if (s[i] === '=' && i + 2 < s.length) { arr.push(parseInt(s.slice(i+1,i+3),16)); i+=3; }
+            else { arr.push(s.charCodeAt(i)); i++; }
+          }
+          bytes = new Uint8Array(arr);
+        }
+        return new TextDecoder(charset).decode(bytes);
+      } catch(e) { return text; }
+    });
+  }
+
+  function parseParams(str: string): Record<string, string> {
+    const params: Record<string, string> = {};
+    const cont:   Record<string, {val:string,isExt:boolean}[]> = {};
+    const re = /;\s*([\w\-]+)(\*\d+)?(\*)?\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([^;\s]*))/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(str)) !== null) {
+      const key    = m[1].toLowerCase();
+      const seqRaw = m[2];
+      const isExt  = !!m[3];
+      const val    = m[4] !== undefined ? m[4].replace(/\\"/g, '"') : (m[5] || '');
+      const seq    = seqRaw ? parseInt(seqRaw.slice(1)) : null;
+      if (seq !== null) {
+        if (!cont[key]) cont[key] = [];
+        cont[key][seq] = { val, isExt };
+      } else if (isExt) {
+        const parts = val.match(/^([^']*)'([^']*)'\s*(.*)/);
+        if (parts) { try { params[key] = decodeURIComponent(parts[3]); } catch(e) { params[key] = parts[3]; } }
+        else params[key] = val;
+      } else {
+        params[key] = decodeRFC2047(val);
+      }
+    }
+    for (const [key, parts] of Object.entries(cont)) {
+      let combined = '';
+      for (const p of parts) {
+        if (!p) continue;
+        if (p.isExt) {
+          const stripped = p.val.replace(/^[^']*'[^']*'/, '');
+          try { combined += decodeURIComponent(stripped); } catch(e) { combined += stripped; }
+        } else { combined += decodeRFC2047(p.val); }
+      }
+      params[key] = combined;
+    }
+    return params;
+  }
+
+  function sanitizeFilename(name: string | null): string {
+    if (!name) return 'file';
+    const dot   = name.lastIndexOf('.');
+    const base  = dot > 0 ? name.slice(0, dot) : name;
+    const ext   = dot > 0 ? name.slice(dot) : '';
+    const clean = base
+      .replace(/[^\w\s.\-]/g, '-')
+      .replace(/\s+/g, '_')
+      .replace(/-{2,}/g, '-')
+      .replace(/^[-_]+|[-_]+$/g, '');
+    return (clean || 'file') + ext;
+  }
+
+  function guessFilename(mime: string): string {
+    const map: Record<string, string> = {
+      'image/jpeg': 'image.jpg', 'image/png': 'image.png', 'image/gif': 'image.gif',
+      'image/webp': 'image.webp', 'image/heic': 'image.heic',
+      'application/pdf': 'file.pdf', 'application/zip': 'file.zip',
+      'application/msword': 'file.doc',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'file.docx',
+      'application/vnd.ms-excel': 'file.xls',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'file.xlsx',
+    };
+    return map[mime] || 'file.bin';
+  }
+
+  function b64ToBytes(str: string): Uint8Array {
+    const clean = str.replace(/[\r\n\s]/g, '');
+    const bin   = atob(clean);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+
+  function qpToBytes(str: string): Uint8Array {
+    const unfolded = str.replace(/=\r?\n/g, '');
+    const arr: number[] = [];
+    for (let i = 0; i < unfolded.length;) {
+      if (unfolded[i] === '=' && i + 2 < unfolded.length) {
+        arr.push(parseInt(unfolded.slice(i+1,i+3), 16)); i += 3;
+      } else {
+        arr.push(unfolded.charCodeAt(i)); i++;
+      }
+    }
+    return new Uint8Array(arr);
+  }
+
+  function parseEML(ab: ArrayBuffer): Attachment[] {
+    const text  = new TextDecoder('latin1').decode(new Uint8Array(ab));
+    const lines = text.split(/\r?\n/);
+    const attachments: Attachment[] = [];
+    parseSection(lines, 0, lines.length, attachments, true);
+    return attachments;
+  }
+
+  function parseSection(
+    lines: string[], start: number, end: number,
+    attachments: Attachment[], isRoot: boolean,
+  ) {
+    let i = start;
+    const headers: Record<string, string> = {};
+    while (i < end) {
+      const line = lines[i];
+      if (line === '') { i++; break; }
+      if (/^[ \t]/.test(line)) {
+        const lastKey = Object.keys(headers).pop();
+        if (lastKey) headers[lastKey] += ' ' + line.trim();
+      } else {
+        const colon = line.indexOf(':');
+        if (colon > 0) {
+          headers[line.slice(0, colon).trim().toLowerCase()] = line.slice(colon + 1).trim();
+        }
+      }
+      i++;
+    }
+    const bodyStart = i;
+    const ct  = headers['content-type'] || '';
+    const cd  = headers['content-disposition'] || '';
+    const cte = (headers['content-transfer-encoding'] || '').trim().toLowerCase();
+    const ctMain   = (ct.split(';')[0] || '').trim().toLowerCase();
+    const ctParams = parseParams(ct);
+    const cdParams = parseParams(cd);
+
+    if (ctMain.startsWith('multipart/')) {
+      const boundary = ctParams['boundary'];
+      if (boundary) parseMultipart(lines, bodyStart, end, boundary, attachments);
+      return;
+    }
+    if (isRoot) return;
+
+    const filename =
+      cdParams['filename*'] || cdParams['filename'] ||
+      ctParams['name*']     || ctParams['name']     || null;
+
+    const isAttachment = /attachment/i.test(cd) || !!filename;
+    const isImage      = ctMain.startsWith('image/');
+    const isBinary     = ctMain.startsWith('application/');
+    if (!isAttachment && !isImage && !isBinary) return;
+
+    const bodyText = lines.slice(bodyStart, end).join('\n');
+    let data: Uint8Array;
+    try {
+      if (cte === 'base64')                data = b64ToBytes(bodyText);
+      else if (cte === 'quoted-printable') data = qpToBytes(bodyText);
+      else                                 data = b64ToBytes(bodyText);
+    } catch(e) { data = new Uint8Array(0); }
+
+    if (data.length === 0) return;
+
+    attachments.push({
+      filename: sanitizeFilename(filename || guessFilename(ctMain)),
+      mimeType: ctMain,
+      data,
+    });
+  }
+
+  function parseMultipart(
+    lines: string[], start: number, end: number,
+    boundary: string, attachments: Attachment[],
+  ) {
+    const delim    = '--' + boundary;
+    const delimEnd = '--' + boundary + '--';
+    const positions: { line: number; isEnd: boolean }[] = [];
+    for (let i = start; i < end; i++) {
+      const t = lines[i].trimEnd();
+      if (t === delim || t === delimEnd) positions.push({ line: i, isEnd: t === delimEnd });
+    }
+    for (let d = 0; d < positions.length - 1; d++) {
+      const partStart = positions[d].line + 1;
+      const partEnd   = positions[d + 1].line;
+      if (partStart < partEnd) parseSection(lines, partStart, partEnd, attachments, false);
+      if (positions[d + 1].isEnd) break;
+    }
+  }
+})();
+</script>

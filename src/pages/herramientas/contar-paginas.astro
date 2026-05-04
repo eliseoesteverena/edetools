@@ -1,0 +1,550 @@
+---
+// src/pages/herramientas/contar-paginas.astro
+import ToolLayout from '../../layouts/ToolLayout.astro';
+---
+
+<ToolLayout
+  title="Contar páginas"
+  description="Arrastrá uno o varios PDFs para contar sus páginas y calcular cuántas hojas necesitás según el tipo de impresión."
+  icon="🔢"
+  tags={[
+    { label: 'pdf', type: 'pdf' },
+    { label: 'client-side', type: 'web' },
+  ]}
+>
+
+  <!-- PDF.js desde CDN -->
+  <script
+    is:inline
+    src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
+  ></script>
+
+  <div class="tool-wrap">
+
+    <!-- Drop zone -->
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept="application/pdf" multiple />
+      <span class="drop-icon" aria-hidden="true">📄</span>
+      <p class="drop-text">Arrastrá tus PDFs aquí o <span class="drop-link">hacé clic para seleccionar</span></p>
+      <p class="drop-hint">Se pueden cargar múltiples archivos a la vez</p>
+    </div>
+
+    <!-- Calculadora (oculta hasta tener resultados) -->
+    <div class="calculator" id="calculator" hidden>
+
+      <div class="calc-header">
+        <h2 class="calc-title">Calculadora de impresión</h2>
+      </div>
+
+      <div class="calc-options">
+        <fieldset>
+          <legend>Páginas por carilla</legend>
+          <div class="radio-row">
+            <label><input type="radio" name="pagesPerSide" value="1" checked /> 1</label>
+            <label><input type="radio" name="pagesPerSide" value="2" /> 2</label>
+            <label><input type="radio" name="pagesPerSide" value="4" /> 4</label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Tipo de impresión</legend>
+          <div class="radio-row">
+            <label><input type="radio" name="printType" value="2" checked /> Doble faz</label>
+            <label><input type="radio" name="printType" value="1" /> Simple faz</label>
+          </div>
+        </fieldset>
+      </div>
+
+      <!-- Totales -->
+      <div class="totals" id="totals"></div>
+
+      <!-- Tamaños detectados -->
+      <div class="sizes-panel" id="sizesPanel" hidden>
+        <p class="sizes-label">Tamaños de página detectados</p>
+        <div class="sizes-list" id="sizesList"></div>
+      </div>
+
+    </div>
+
+    <!-- Listado de archivos -->
+    <div class="results" id="results"></div>
+
+  </div>
+
+</ToolLayout>
+
+<style>
+  .tool-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    max-width: 52rem;
+  }
+
+  /* ── Drop zone ─────────────────────────────────────── */
+  .drop-zone {
+    position: relative;
+    border: 2px dashed var(--color-gray-200);
+    border-radius: var(--radius-lg);
+    padding: var(--space-8) var(--space-6);
+    text-align: center;
+    cursor: pointer;
+    background: var(--color-white);
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .drop-zone:hover,
+  .drop-zone.drag-over {
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
+  }
+
+  /* Input invisible sobre toda la zona */
+  .drop-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .drop-icon { font-size: 2rem; display: block; margin-bottom: var(--space-2); }
+
+  .drop-text {
+    font-size: var(--font-base);
+    color: var(--color-gray-700);
+    margin-bottom: var(--space-1);
+  }
+
+  .drop-link { color: var(--color-primary); font-weight: 600; }
+
+  .drop-hint {
+    font-size: var(--font-xs);
+    color: var(--color-gray-500);
+    margin-bottom: 0;
+  }
+
+  /* ── Calculadora ───────────────────────────────────── */
+  .calculator {
+    background: var(--color-white);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .calc-title {
+    font-size: var(--font-base);
+    font-weight: 600;
+    color: var(--color-gray-900);
+    margin-bottom: 0;
+  }
+
+  .calc-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-4);
+  }
+
+  @media (max-width: 480px) {
+    .calc-options { grid-template-columns: 1fr; }
+  }
+
+  .calc-options fieldset {
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    margin: 0;
+  }
+
+  .calc-options legend {
+    font-size: var(--font-sm);
+    font-weight: 600;
+    padding: 0 var(--space-1);
+    color: var(--color-gray-700);
+  }
+
+  .radio-row {
+    display: flex;
+    gap: var(--space-4);
+    margin-top: var(--space-2);
+  }
+
+  .radio-row label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--font-sm);
+    font-weight: 400;
+    color: var(--color-gray-700);
+    cursor: pointer;
+    margin: 0;
+  }
+
+  .radio-row input { width: auto; cursor: pointer; }
+
+  /* ── Totales ────────────────────────────────────────── */
+  .totals {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+
+  .total-card {
+    flex: 1;
+    min-width: 100px;
+    background: var(--color-gray-50);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    text-align: center;
+  }
+
+  .total-card .t-label {
+    font-size: var(--font-xs);
+    color: var(--color-gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: var(--space-1);
+  }
+
+  .total-card .t-value {
+    font-size: var(--font-3xl);
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .total-card.primary .t-value { color: var(--color-primary); }
+  .total-card.success .t-value { color: #166534; }
+  .total-card.warning .t-value { color: #92400e; }
+
+  /* ── Tamaños ────────────────────────────────────────── */
+  .sizes-panel {
+    background: var(--color-gray-50);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+  }
+
+  .sizes-label {
+    font-size: var(--font-xs);
+    font-weight: 600;
+    color: var(--color-gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: var(--space-2);
+  }
+
+  .sizes-list { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+
+  .size-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: var(--font-xs);
+    font-weight: 600;
+    padding: 0.15rem 0.5rem;
+    border-radius: 2rem;
+    white-space: nowrap;
+  }
+
+  .size-badge .count {
+    background: rgba(0,0,0,0.1);
+    border-radius: 1rem;
+    padding: 0 5px;
+    font-weight: 400;
+  }
+
+  .sz-a3     { background: #e3f2fd; color: #1565c0; }
+  .sz-a4     { background: #e8f5e9; color: #2e7d32; }
+  .sz-a5     { background: #fff3e0; color: #e65100; }
+  .sz-letter { background: #fce4ec; color: #880e4f; }
+  .sz-other  { background: #f3e5f5; color: #6a1b9a; }
+
+  /* ── Resultados por archivo ─────────────────────────── */
+  .results {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .result-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    background: var(--color-white);
+    border: 1px solid var(--color-gray-200);
+  }
+
+  .result-item.is-error {
+    background: #fdecea;
+    border-color: #f5c6cb;
+  }
+
+  .result-info { flex: 1; min-width: 0; }
+
+  .result-name {
+    font-size: var(--font-sm);
+    font-weight: 500;
+    color: var(--color-gray-900);
+    word-break: break-all;
+    margin-bottom: 2px;
+  }
+
+  .result-sheets {
+    font-size: var(--font-xs);
+    color: var(--color-gray-500);
+  }
+
+  .result-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 3px;
+    margin-top: 4px;
+  }
+
+  .size-pill {
+    font-size: 0.6rem;
+    font-weight: 600;
+    padding: 1px 6px;
+    border-radius: 1rem;
+  }
+
+  .result-pages {
+    font-size: var(--font-xl);
+    font-weight: 700;
+    color: var(--color-primary);
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .result-item.is-error .result-pages { color: var(--color-accent); }
+
+  @media (max-width: 480px) {
+    .result-item { flex-wrap: wrap; }
+    .result-pages { align-self: flex-end; }
+  }
+</style>
+
+<script>
+(function () {
+  // ── PDF.js worker ────────────────────────────────────
+  // @ts-ignore
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  // ── Referencias ──────────────────────────────────────
+  const dropZone   = document.getElementById('dropZone')   as HTMLDivElement;
+  const fileInput  = document.getElementById('fileInput')  as HTMLInputElement;
+  const calculator = document.getElementById('calculator') as HTMLDivElement;
+  const totalsEl   = document.getElementById('totals')     as HTMLDivElement;
+  const sizesPanel = document.getElementById('sizesPanel') as HTMLDivElement;
+  const sizesList  = document.getElementById('sizesList')  as HTMLDivElement;
+  const resultsEl  = document.getElementById('results')    as HTMLDivElement;
+
+  type PdfEntry = { name: string; pages: number; pageSizes: Record<string, number>; error?: boolean };
+  let pdfData: PdfEntry[] = [];
+
+  // ── Drag & drop ──────────────────────────────────────
+  fileInput.addEventListener('change', e => handleFiles((e.target as HTMLInputElement).files!));
+
+  ['dragenter','dragover','dragleave','drop'].forEach(ev =>
+    dropZone.addEventListener(ev, e => e.preventDefault())
+  );
+  ['dragenter','dragover'].forEach(ev =>
+    dropZone.addEventListener(ev, () => dropZone.classList.add('drag-over'))
+  );
+  ['dragleave','drop'].forEach(ev =>
+    dropZone.addEventListener(ev, () => dropZone.classList.remove('drag-over'))
+  );
+  dropZone.addEventListener('drop', e =>
+    handleFiles((e as DragEvent).dataTransfer!.files)
+  );
+
+  // ── Clasificación de tamaños ─────────────────────────
+  function classifySize(wMM: number, hMM: number): string {
+    const w = Math.min(wMM, hMM);
+    const h = Math.max(wMM, hMM);
+    const tol = 5;
+    const sizes = [
+      { name: 'A0',       w: 841,  h: 1189 },
+      { name: 'A1',       w: 594,  h: 841  },
+      { name: 'A2',       w: 420,  h: 594  },
+      { name: 'A3',       w: 297,  h: 420  },
+      { name: 'A4',       w: 210,  h: 297  },
+      { name: 'A5',       w: 148,  h: 210  },
+      { name: 'A6',       w: 105,  h: 148  },
+      { name: 'Carta',    w: 216,  h: 279  },
+      { name: 'Legal',    w: 216,  h: 356  },
+      { name: 'Oficio',   w: 216,  h: 330  },
+      { name: 'Tabloide', w: 279,  h: 432  },
+    ];
+    for (const s of sizes) {
+      if (Math.abs(w - s.w) <= tol && Math.abs(h - s.h) <= tol) return s.name;
+    }
+    return `${wMM}×${hMM}mm`;
+  }
+
+  function getSizeClass(name: string): string {
+    if (['A0','A1','A2','A3','Tabloide'].includes(name)) return 'sz-a3';
+    if (name === 'A4')                                    return 'sz-a4';
+    if (['A5','A6'].includes(name))                       return 'sz-a5';
+    if (['Carta','Legal','Oficio'].includes(name))        return 'sz-letter';
+    return 'sz-other';
+  }
+
+  // ── Lectura de archivos ──────────────────────────────
+  async function handleFiles(files: FileList) {
+    resultsEl.innerHTML = '';
+    pdfData = [];
+    const valid = Array.from(files).filter(f => f.type === 'application/pdf');
+    if (!valid.length) return;
+
+    for (const file of valid) {
+      const ab = await file.arrayBuffer();
+      try {
+        // @ts-ignore
+        const pdf = await pdfjsLib.getDocument(new Uint8Array(ab)).promise;
+        const pageSizes: Record<string, number> = {};
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const vp   = page.getViewport({ scale: 1 });
+          const wMM  = Math.round(vp.width  * 25.4 / 72);
+          const hMM  = Math.round(vp.height * 25.4 / 72);
+          const name = classifySize(wMM, hMM);
+          pageSizes[name] = (pageSizes[name] || 0) + 1;
+        }
+        pdfData.push({ name: file.name, pages: pdf.numPages, pageSizes });
+      } catch {
+        pdfData.push({ name: file.name, pages: 0, pageSizes: {}, error: true });
+      }
+    }
+
+    renderResults();
+  }
+
+  // ── Render ────────────────────────────────────────────
+  function renderResults() {
+    if (!pdfData.length) {
+      calculator.hidden = true;
+      return;
+    }
+    calculator.hidden = false;
+    calculateAndRender();
+  }
+
+  function calculateAndRender() {
+    const pagesPerSide = parseInt(
+      (document.querySelector('input[name="pagesPerSide"]:checked') as HTMLInputElement).value
+    );
+    const printType = parseInt(
+      (document.querySelector('input[name="printType"]:checked') as HTMLInputElement).value
+    );
+
+    let totalPages = 0, totalDouble = 0, totalSingle = 0;
+    const globalSizes: Record<string, number> = {};
+    resultsEl.innerHTML = '';
+
+    for (const pdf of pdfData) {
+      if (pdf.error) {
+        resultsEl.innerHTML += `
+          <div class="result-item is-error">
+            <div class="result-info">
+              <div class="result-name">${pdf.name}</div>
+            </div>
+            <div class="result-pages">Error</div>
+          </div>`;
+        continue;
+      }
+
+      totalPages += pdf.pages;
+
+      for (const [sz, cnt] of Object.entries(pdf.pageSizes)) {
+        globalSizes[sz] = (globalSizes[sz] || 0) + cnt;
+      }
+
+      const finalPages  = pdf.pages / pagesPerSide;
+      const sheets      = finalPages / printType;
+      const fullSheets  = Math.floor(sheets);
+      const hasRem      = sheets % 1 !== 0;
+      let double = 0, single = 0;
+
+      if (printType === 2) {
+        double = fullSheets;
+        if (hasRem) single = 1;
+        totalDouble += double;
+        totalSingle += single;
+      } else {
+        single = Math.ceil(sheets);
+        totalSingle += single;
+      }
+
+      const sheetText = printType === 2
+        ? `${double} doble${double !== 1 ? 's' : ''} + ${single} simple${single !== 1 ? 's' : ''}`
+        : `${single} hoja${single !== 1 ? 's' : ''}`;
+
+      const pills = Object.entries(pdf.pageSizes)
+        .sort((a, b) => b[1] - a[1])
+        .map(([sz, cnt]) => {
+          const cls   = getSizeClass(sz);
+          const label = cnt === pdf.pages ? sz : `${sz} ×${cnt}`;
+          return `<span class="size-pill ${cls}">${label}</span>`;
+        }).join('');
+
+      resultsEl.innerHTML += `
+        <div class="result-item">
+          <div class="result-info">
+            <div class="result-name">${pdf.name}</div>
+            <div class="result-sheets">${sheetText}</div>
+            <div class="result-pills">${pills}</div>
+          </div>
+          <div class="result-pages">${pdf.pages} pág.</div>
+        </div>`;
+    }
+
+    // Totales
+    const validCount = pdfData.filter(p => !p.error).length;
+    totalsEl.innerHTML = `
+      <div class="total-card primary">
+        <div class="t-label">PDFs</div>
+        <div class="t-value">${validCount}</div>
+      </div>
+      <div class="total-card primary">
+        <div class="t-label">Páginas</div>
+        <div class="t-value">${totalPages}</div>
+      </div>
+      ${totalDouble > 0 ? `
+      <div class="total-card success">
+        <div class="t-label">Doble faz</div>
+        <div class="t-value">${totalDouble}</div>
+      </div>` : ''}
+      ${totalSingle > 0 ? `
+      <div class="total-card warning">
+        <div class="t-label">Simple faz</div>
+        <div class="t-value">${totalSingle}</div>
+      </div>` : ''}`;
+
+    // Tamaños
+    const sizeEntries = Object.entries(globalSizes).sort((a, b) => b[1] - a[1]);
+    if (sizeEntries.length) {
+      sizesPanel.hidden = false;
+      sizesList.innerHTML = sizeEntries.map(([sz, cnt]) =>
+        `<span class="size-badge ${getSizeClass(sz)}">${sz} <span class="count">${cnt} pág.</span></span>`
+      ).join('');
+    } else {
+      sizesPanel.hidden = true;
+    }
+  }
+
+  // Recalcular al cambiar opciones
+  document.querySelectorAll('input[name="pagesPerSide"], input[name="printType"]')
+    .forEach(input => input.addEventListener('change', () => {
+      if (pdfData.length) calculateAndRender();
+    }));
+})();
+</script>

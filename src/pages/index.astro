@@ -117,10 +117,11 @@ import ToolCard    from '../components/ToolCard.astro';
 
           <div data-cats="pdf web">
             <ToolCard
+              href="/herramientas/contar-paginas"
               title="Contar páginas"
               description="Cuenta páginas de múltiples PDFs y calcula la cantidad de hojas necesarias según impresión simple o doble faz."
               icon="🔢"
-              status="pending"
+              status="live"
               tags={[
                 { label: 'pdf', type: 'pdf' },
                 { label: 'client-side', type: 'web' },
@@ -177,14 +178,14 @@ import ToolCard    from '../components/ToolCard.astro';
 
           <div data-cats="email local">
             <ToolCard
+              href="/herramientas/eml-extractor"
               title="Extractor de EMLs"
               description="Extrae los adjuntos de un conjunto de archivos .eml y los organiza en una carpeta de salida."
               icon="📧"
-              status="pending"
+              status="live"
               tags={[
                 { label: 'eml', type: 'email' },
-                { label: 'python', type: 'python' },
-                { label: 'local', type: 'local' },
+                { label: 'client-side', type: 'web' },
               ]}
             />
           </div>
