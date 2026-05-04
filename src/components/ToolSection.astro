@@ -1,0 +1,66 @@
+---
+// src/components/ToolSection.astro
+// Sección con título y grilla de herramientas.
+// Uso:
+//   <ToolSection title="Impresión">
+//     <ToolCard ... />
+//     <ToolCard ... />
+//   </ToolSection>
+
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+---
+
+<section class="tool-section">
+  <div class="section-header">
+    <h2 class="section-title">{title}</h2>
+    <div class="section-line" aria-hidden="true"></div>
+  </div>
+  <div class="tools-grid">
+    <slot />
+  </div>
+</section>
+
+<style>
+  .tool-section { margin-bottom: var(--space-8); }
+
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+  }
+
+  .section-title {
+    font-size: var(--font-sm);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--color-gray-500);
+    margin-bottom: 0;
+    white-space: nowrap;
+  }
+
+  .section-line {
+    flex: 1;
+    height: 1px;
+    background: var(--color-gray-200);
+  }
+
+  .tools-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-3);
+  }
+
+  @media (min-width: 640px) {
+    .tools-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media (min-width: 768px) {
+    .tools-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>

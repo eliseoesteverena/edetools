@@ -1,0 +1,520 @@
+---
+// src/pages/herramientas/marcas-de-corte.astro
+// Herramienta: Generador de Marcas de Corte
+// Lógica 100% client-side — sin dependencias de servidor.
+// Migrado desde PHP (auth.php eliminado; Auth0 manejará auth a nivel de layout cuando esté listo).
+import ToolLayout from '../../layouts/ToolLayout.astro';
+---
+
+<ToolLayout
+  title="Marcas de corte"
+  description="Genera marcas de corte para piezas de impresión. Cargá el arte, configurá el tamaño de pieza y hoja, y descargá el SVG listo para enviar a imprenta."
+  icon="✂️"
+  tags={[
+    { label: 'impresión', type: 'print' },
+    { label: 'client-side', type: 'web' },
+  ]}
+>
+
+  <div class="tool-layout">
+
+    <!-- ── Panel de configuración ──────────────────────── -->
+    <aside class="config-panel">
+      <form id="configForm" novalidate>
+
+        <fieldset>
+          <legend>Tamaño de pieza</legend>
+          <div class="field-row">
+            <div class="field">
+              <label for="pieceWidth">Ancho (mm)</label>
+              <input type="number" id="pieceWidth" value="50" min="1" step="0.1" required />
+            </div>
+            <div class="field">
+              <label for="pieceHeight">Alto (mm)</label>
+              <input type="number" id="pieceHeight" value="90" min="1" step="0.1" required />
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Tamaño de hoja</legend>
+          <div class="field-row">
+            <div class="field">
+              <label for="sheetWidth">Ancho (mm)</label>
+              <input type="number" id="sheetWidth" value="320" min="1" step="1" required />
+            </div>
+            <div class="field">
+              <label for="sheetHeight">Alto (mm)</label>
+              <input type="number" id="sheetHeight" value="475" min="1" step="1" required />
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Opciones de marca</legend>
+          <div class="field-row">
+            <div class="field">
+              <label for="margin">Margen (mm)</label>
+              <input type="number" id="margin" value="10" min="0" step="0.5" />
+            </div>
+            <div class="field">
+              <label for="crossArm">Brazo de cruz (mm)</label>
+              <input type="number" id="crossArm" value="3" min="0.5" step="0.5" />
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Arte (opcional)</legend>
+          <p class="field-hint">SVG, PNG o JPG. Se escala para cubrir cada pieza.</p>
+          <label for="artworkFile" class="file-label">
+            <span id="fileLabel">Elegir archivo…</span>
+            <input type="file" id="artworkFile" accept=".svg,image/svg+xml,.png,.jpg,.jpeg" />
+          </label>
+          <button type="button" id="clearArtwork" class="btn-ghost" style="display:none">
+            × Quitar archivo
+          </button>
+        </fieldset>
+
+        <!-- Info de grilla calculada en tiempo real -->
+        <div class="grid-info" id="gridInfo" aria-live="polite">
+          <span class="grid-info-item">
+            <strong id="infoGrid">—</strong>
+            <small>piezas en grilla</small>
+          </span>
+          <span class="grid-info-item">
+            <strong id="infoCols">—</strong>
+            <small>columnas</small>
+          </span>
+          <span class="grid-info-item">
+            <strong id="infoRows">—</strong>
+            <small>filas</small>
+          </span>
+        </div>
+
+        <button type="submit" id="generateBtn" class="btn-generate">
+          Generar y descargar SVG
+        </button>
+
+      </form>
+    </aside>
+
+    <!-- ── Panel de previsualización ────────────────────── -->
+    <section class="preview-panel" aria-label="Previsualización">
+      <div class="preview-header">
+        <span class="preview-title">Previsualización</span>
+        <span class="preview-hint" id="previewHint">Completá la configuración y generá el SVG</span>
+      </div>
+      <div class="preview-area" id="svgContainer">
+        <div class="preview-placeholder" id="previewPlaceholder" aria-hidden="true">
+          <span>✂️</span>
+          <small>El SVG aparecerá aquí</small>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+</ToolLayout>
+
+<!-- ═══════════════════════════════════════════════════════
+     ESTILOS — scoped a esta página
+════════════════════════════════════════════════════════ -->
+<style>
+  /* Layout de dos columnas */
+  .tool-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+  }
+
+  @media (min-width: 768px) {
+    .tool-layout {
+      grid-template-columns: 22rem 1fr;
+      align-items: start;
+    }
+  }
+
+  /* ── Panel de configuración ────────────────────────── */
+  .config-panel {
+    background: var(--color-white);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+  }
+
+  .config-panel fieldset {
+    margin-bottom: var(--space-4);
+    border-color: var(--color-gray-200);
+  }
+
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-3);
+  }
+
+  .field { display: flex; flex-direction: column; gap: var(--space-1); }
+
+  .field-hint {
+    font-size: var(--font-xs);
+    color: var(--color-gray-500);
+    margin-bottom: var(--space-2);
+  }
+
+  /* File input custom */
+  .file-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-3);
+    border: 2px dashed var(--color-gray-200);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: var(--font-sm);
+    color: var(--color-gray-500);
+    transition: border-color 0.2s, color 0.2s;
+    text-align: center;
+    font-weight: 500;
+  }
+
+  .file-label:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+
+  .file-label input[type="file"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .btn-ghost {
+    background: transparent;
+    border: none;
+    color: var(--color-gray-500);
+    font-size: var(--font-xs);
+    cursor: pointer;
+    padding: var(--space-1) 0;
+    font-family: inherit;
+    text-align: left;
+  }
+
+  .btn-ghost:hover { color: var(--color-accent); background: transparent; }
+
+  /* Grid info */
+  .grid-info {
+    display: flex;
+    gap: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-gray-50);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-4);
+  }
+
+  .grid-info-item {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+
+  .grid-info-item strong {
+    font-size: var(--font-lg);
+    font-weight: 700;
+    color: var(--color-primary);
+    line-height: 1;
+  }
+
+  .grid-info-item small {
+    font-size: var(--font-xs);
+    color: var(--color-gray-500);
+  }
+
+  /* Botón principal */
+  .btn-generate {
+    width: 100%;
+    padding: var(--space-3);
+    font-size: var(--font-base);
+    font-weight: 600;
+    background: var(--color-accent);
+    border: none;
+    border-radius: var(--radius-md);
+    color: #ffffff;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.2s, transform 0.1s;
+  }
+
+  .btn-generate:hover  { background: #c0303b; }
+  .btn-generate:active { transform: scale(0.98); }
+
+  /* ── Panel de previsualización ──────────────────────── */
+  .preview-panel {
+    background: var(--color-white);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 400px;
+  }
+
+  .preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-gray-200);
+    background: var(--color-gray-50);
+  }
+
+  .preview-title {
+    font-size: var(--font-sm);
+    font-weight: 600;
+    color: var(--color-gray-700);
+  }
+
+  .preview-hint {
+    font-size: var(--font-xs);
+    color: var(--color-gray-500);
+  }
+
+  .preview-area {
+    flex: 1;
+    overflow: auto;
+    padding: var(--space-4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .preview-area svg {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    border: 1px dashed var(--color-gray-200);
+  }
+
+  .preview-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--color-gray-500);
+  }
+
+  .preview-placeholder span { font-size: 2.5rem; opacity: 0.3; }
+  .preview-placeholder small { font-size: var(--font-xs); }
+</style>
+
+<!-- ═══════════════════════════════════════════════════════
+     SCRIPT — lógica original conservada, refactorizada
+════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+  // ── Referencias al DOM ─────────────────────────────
+  const form        = document.getElementById('configForm')    as HTMLFormElement;
+  const container   = document.getElementById('svgContainer')  as HTMLDivElement;
+  const fileInput   = document.getElementById('artworkFile')   as HTMLInputElement;
+  const fileLabel   = document.getElementById('fileLabel')     as HTMLSpanElement;
+  const clearBtn    = document.getElementById('clearArtwork')  as HTMLButtonElement;
+  const previewHint = document.getElementById('previewHint')   as HTMLSpanElement;
+  const placeholder = document.getElementById('previewPlaceholder') as HTMLDivElement;
+  const infoGrid    = document.getElementById('infoGrid')      as HTMLElement;
+  const infoCols    = document.getElementById('infoCols')      as HTMLElement;
+  const infoRows    = document.getElementById('infoRows')      as HTMLElement;
+
+  let artworkData: { type: 'svg' | 'raster'; content: string; width: number; height: number } | null = null;
+
+  // ── Actualizar info de grilla en tiempo real ────────
+  function updateGridInfo() {
+    const cfg  = getConfig();
+    const grid = calculateGrid(cfg);
+    infoCols.textContent = String(grid.cols);
+    infoRows.textContent = String(grid.rows);
+    infoGrid.textContent = String(grid.cols * grid.rows);
+  }
+
+  ['pieceWidth','pieceHeight','sheetWidth','sheetHeight','margin'].forEach(id => {
+    document.getElementById(id)?.addEventListener('input', updateGridInfo);
+  });
+
+  updateGridInfo();
+
+  // ── Submit del formulario ───────────────────────────
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const config  = getConfig();
+    const grid    = calculateGrid(config);
+    const crosses = getCrossPositions(config, grid.cols, grid.rows);
+    const svg     = generateSVG(config, grid, crosses, artworkData);
+    renderSVG(svg);
+    downloadSVG(svg);
+  });
+
+  // ── Manejo de archivo de arte ───────────────────────
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+
+    if (file.type === 'image/svg+xml') {
+      readSVG(file);
+    } else if (/^image\/(png|jpe?g)$/.test(file.type)) {
+      readRaster(file);
+    } else {
+      alert('Formato no soportado. Solo SVG, PNG o JPG.');
+      return;
+    }
+
+    fileLabel.textContent = file.name;
+    clearBtn.style.display = 'inline';
+  });
+
+  clearBtn.addEventListener('click', () => {
+    artworkData = null;
+    fileInput.value = '';
+    fileLabel.textContent = 'Elegir archivo…';
+    clearBtn.style.display = 'none';
+  });
+
+  // ── Config ─────────────────────────────────────────
+  function getConfig() {
+    return {
+      pieceWidth:  parseFloat((document.getElementById('pieceWidth')  as HTMLInputElement).value),
+      pieceHeight: parseFloat((document.getElementById('pieceHeight') as HTMLInputElement).value),
+      sheetWidth:  parseFloat((document.getElementById('sheetWidth')  as HTMLInputElement).value),
+      sheetHeight: parseFloat((document.getElementById('sheetHeight') as HTMLInputElement).value),
+      margin:      parseFloat((document.getElementById('margin')      as HTMLInputElement).value) || 0,
+      crossArm:    parseFloat((document.getElementById('crossArm')    as HTMLInputElement).value),
+      strokeWidth: 0.2,
+    };
+  }
+
+  // ── Cálculos de grilla ──────────────────────────────
+  function calculateGrid({ sheetWidth, sheetHeight, margin, pieceWidth, pieceHeight }: ReturnType<typeof getConfig>) {
+    return {
+      cols: Math.floor((sheetWidth  - 2 * margin) / pieceWidth),
+      rows: Math.floor((sheetHeight - 2 * margin) / pieceHeight),
+    };
+  }
+
+  function getCrossPositions(
+    { margin, pieceWidth, pieceHeight }: ReturnType<typeof getConfig>,
+    cols: number,
+    rows: number,
+  ) {
+    const pos: { x: number; y: number }[] = [];
+    for (let i = 0; i <= cols; i++) {
+      for (let j = 0; j <= rows; j++) {
+        pos.push({ x: margin + i * pieceWidth, y: margin + j * pieceHeight });
+      }
+    }
+    return pos;
+  }
+
+  // ── Generación de SVG ───────────────────────────────
+  function generateCross(x: number, y: number, arm: number, stroke: number) {
+    return `<g class="cut-mark">
+      <line x1="${x - arm}" y1="${y}" x2="${x + arm}" y2="${y}" stroke="black" stroke-width="${stroke}"/>
+      <line x1="${x}" y1="${y - arm}" x2="${x}" y2="${y + arm}" stroke="black" stroke-width="${stroke}"/>
+    </g>`;
+  }
+
+  function generateArtworkGroup(
+    config: ReturnType<typeof getConfig>,
+    grid: ReturnType<typeof calculateGrid>,
+  ) {
+    if (!artworkData) return '';
+    const { pieceWidth, pieceHeight, margin } = config;
+    const sx = pieceWidth  / artworkData.width;
+    const sy = pieceHeight / artworkData.height;
+    let group = '<g id="artwork">';
+    for (let i = 0; i < grid.cols; i++) {
+      for (let j = 0; j < grid.rows; j++) {
+        const tx = margin + i * pieceWidth;
+        const ty = margin + j * pieceHeight;
+        if (artworkData.type === 'svg') {
+          group += `<g transform="translate(${tx},${ty}) scale(${sx},${sy})">${artworkData.content}</g>`;
+        } else {
+          group += `<image x="${tx}" y="${ty}" width="${pieceWidth}" height="${pieceHeight}" href="${artworkData.content}"/>`;
+        }
+      }
+    }
+    group += '</g>';
+    return group;
+  }
+
+  function generateSVG(
+    config: ReturnType<typeof getConfig>,
+    grid:   ReturnType<typeof calculateGrid>,
+    crosses: { x: number; y: number }[],
+    _art: typeof artworkData,
+  ) {
+    const { sheetWidth, sheetHeight, strokeWidth, crossArm } = config;
+    const cutMarks = crosses.map(c => generateCross(c.x, c.y, crossArm, strokeWidth)).join('');
+    const artwork  = generateArtworkGroup(config, grid);
+    return `<svg xmlns="http://www.w3.org/2000/svg"
+      width="${sheetWidth}mm" height="${sheetHeight}mm"
+      viewBox="0 0 ${sheetWidth} ${sheetHeight}">
+      ${artwork}
+      ${cutMarks}
+    </svg>`;
+  }
+
+  // ── Render + descarga ───────────────────────────────
+  function renderSVG(svg: string) {
+    placeholder?.remove();
+    container.innerHTML = svg;
+    if (previewHint) previewHint.textContent = 'SVG generado — descarga iniciada';
+  }
+
+  function downloadSVG(svg: string) {
+    const blob = new Blob([svg], { type: 'image/svg+xml' });
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement('a'), {
+      href: url,
+      download: 'marcas_corte.svg',
+    });
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  // ── Lectura de archivos ─────────────────────────────
+  function readSVG(file: File) {
+    const r = new FileReader();
+    r.onload = () => {
+      const doc   = new DOMParser().parseFromString(r.result as string, 'image/svg+xml');
+      const inner = [...doc.documentElement.childNodes]
+        .map(n => new XMLSerializer().serializeToString(n))
+        .join('');
+      const vb = doc.documentElement.getAttribute('viewBox')
+        ?.split(' ').map(Number) ?? [0, 0,
+          doc.documentElement.width.baseVal.value,
+          doc.documentElement.height.baseVal.value];
+      artworkData = { type: 'svg', content: inner, width: vb[2], height: vb[3] };
+    };
+    r.readAsText(file);
+  }
+
+  function readRaster(file: File) {
+    const r = new FileReader();
+    r.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        artworkData = {
+          type: 'raster',
+          content: r.result as string,
+          width:  img.naturalWidth,
+          height: img.naturalHeight,
+        };
+      };
+      img.src = r.result as string;
+    };
+    r.readAsDataURL(file);
+  }
+})();
+</script>

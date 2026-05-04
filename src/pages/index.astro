@@ -1,0 +1,338 @@
+---
+// src/pages/index.astro — Hub principal de edetools
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ToolSection from '../components/ToolSection.astro';
+import ToolCard    from '../components/ToolCard.astro';
+---
+
+<BaseLayout
+  title="Herramientas para gráfica e impresión"
+  description="Utilidades para el flujo de trabajo de imprentas, rúbrogràficas y centros de copiado."
+>
+
+  <!-- ── Hero ──────────────────────────────────────────── -->
+  <section class="hero">
+    <div class="container">
+      <h1>Herramientas para<br /><span class="hero-accent">gráfica e impresión</span></h1>
+      <p>Utilidades diseñadas para el flujo de trabajo de imprentas, rúbrográficas y centros de copiado. Sin instalaciones, sin complicaciones.</p>
+    </div>
+  </section>
+
+  <!-- ── Filtros ────────────────────────────────────────── -->
+  <div class="filters-bar" id="herramientas">
+    <div class="container filters-inner">
+      <span class="filter-label" aria-hidden="true">Filtrar</span>
+      <div class="filter-chips" role="group" aria-label="Filtrar herramientas">
+        <button class="filter-chip active" data-filter="all"   type="button">Todas</button>
+        <button class="filter-chip"        data-filter="print" type="button">Impresión</button>
+        <button class="filter-chip"        data-filter="pdf"   type="button">PDF</button>
+        <button class="filter-chip"        data-filter="web"   type="button">Web / texto</button>
+        <button class="filter-chip"        data-filter="local" type="button">Local</button>
+      </div>
+      <span class="result-count" id="result-count" aria-live="polite">11 herramientas</span>
+    </div>
+  </div>
+
+  <!-- ── Herramientas ───────────────────────────────────── -->
+  <div class="tools-content">
+    <div class="container">
+
+      <!-- IMPRESIÓN -->
+      <div data-section="print web">
+        <ToolSection title="Impresión">
+
+          <div data-cats="print web">
+            <ToolCard
+              href="/herramientas/marcas-de-corte"
+              title="Marcas de corte"
+              description="Genera marcas de corte para piezas de impresión. Configurable por tamaño de página, sangrado y longitud de brazo."
+              icon="✂️"
+              status="live"
+              tags={[
+                { label: 'impresión', type: 'print' },
+                { label: 'client-side', type: 'web' },
+              ]}
+            />
+          </div>
+
+          <div data-cats="print web">
+            <ToolCard
+              title="Fotos"
+              description="Genera un documento imprimible con tamaño de página configurable conteniendo múltiples fotos de un tamaño determinado."
+              icon="🖼️"
+              status="pending"
+              tags={[
+                { label: 'impresión', type: 'print' },
+                { label: 'client-side', type: 'web' },
+              ]}
+            />
+          </div>
+
+          <div data-cats="print pdf web">
+            <ToolCard
+              title="Recorte de etiquetas de correo"
+              description="Recorta PDFs de etiquetas de envío postales, agrupando piezas para optimizar el uso de la hoja."
+              icon="📦"
+              status="pending"
+              tags={[
+                { label: 'impresión', type: 'print' },
+                { label: 'pdf', type: 'pdf' },
+                { label: 'client-side', type: 'web' },
+              ]}
+            />
+          </div>
+
+          <div data-cats="print web">
+            <ToolCard
+              title="WhatsApp Imprimible"
+              description="Convierte la sintaxis de marcado ligero de WhatsApp a HTML con formato imprimible listo para usar."
+              icon="💬"
+              status="pending"
+              tags={[
+                { label: 'impresión', type: 'print' },
+                { label: 'client-side', type: 'web' },
+              ]}
+            />
+          </div>
+
+          <div data-cats="print web">
+            <ToolCard
+              title="Formato Carta Documento"
+              description="Formulario web para confección de carta documento. El contenido se imprime sobre la hoja pre-impresa con los campos correspondientes."
+              icon="📄"
+              status="pending"
+              tags={[
+                { label: 'impresión', type: 'print' },
+                { label: 'client-side', type: 'web' },
+              ]}
+            />
+          </div>
+
+        </ToolSection>
+      </div>
+
+      <!-- ARCHIVOS PDF -->
+      <div data-section="pdf local">
+        <ToolSection title="Archivos PDF">
+
+          <div data-cats="pdf web">
+            <ToolCard
+              title="Contar páginas"
+              description="Cuenta páginas de múltiples PDFs y calcula la cantidad de hojas necesarias según impresión simple o doble faz."
+              icon="🔢"
+              status="pending"
+              tags={[
+                { label: 'pdf', type: 'pdf' },
+                { label: 'client-side', type: 'web' },
+              ]}
+            />
+          </div>
+
+          <div data-cats="pdf">
+            <ToolCard
+              title="Extractor de primera página"
+              description="Extrae la primera página de múltiples archivos PDF y los unifica en un único documento."
+              icon="📑"
+              status="pending"
+              tags={[
+                { label: 'pdf', type: 'pdf' },
+                { label: 'php', type: 'php' },
+              ]}
+            />
+          </div>
+
+          <div data-cats="pdf local">
+            <ToolCard
+              title="Detector Color / B&N"
+              description="Itera las páginas de un PDF y detecta si están en escala de grises o contienen color. Configurable: sensibilidad y rangos de páginas."
+              icon="🎨"
+              status="dev"
+              tags={[
+                { label: 'pdf', type: 'pdf' },
+                { label: 'python', type: 'python' },
+                { label: 'local', type: 'local' },
+              ]}
+            />
+          </div>
+
+          <div data-cats="pdf web">
+            <ToolCard
+              title="Dividir stickers"
+              description="Separa una imagen en múltiples imágenes individuales. Útil para hojas de stickers o grillas de ilustraciones."
+              icon="🪄"
+              status="pending"
+              tags={[
+                { label: 'imagen', type: 'img' },
+                { label: 'client-side', type: 'web' },
+              ]}
+            />
+          </div>
+
+        </ToolSection>
+      </div>
+
+      <!-- EMAIL & WEB -->
+      <div data-section="web local email">
+        <ToolSection title="Email & Web">
+
+          <div data-cats="email local">
+            <ToolCard
+              title="Extractor de EMLs"
+              description="Extrae los adjuntos de un conjunto de archivos .eml y los organiza en una carpeta de salida."
+              icon="📧"
+              status="pending"
+              tags={[
+                { label: 'eml', type: 'email' },
+                { label: 'python', type: 'python' },
+                { label: 'local', type: 'local' },
+              ]}
+            />
+          </div>
+
+          <div data-cats="web">
+            <ToolCard
+              title="Abrir links"
+              description="Detecta URLs en un bloque de texto y las abre en nuevas pestañas del navegador en un solo clic."
+              icon="🔗"
+              status="pending"
+              tags={[
+                { label: 'client-side', type: 'web' },
+              ]}
+            />
+          </div>
+
+        </ToolSection>
+      </div>
+
+    </div>
+  </div>
+
+</BaseLayout>
+
+<style>
+  /* ── Hero ──────────────────────────────────────────── */
+  .hero {
+    background: var(--color-primary);
+    padding: var(--space-8) 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .hero h1 {
+    font-size: var(--font-3xl);
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: var(--space-2);
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+
+  .hero-accent { color: var(--color-accent); }
+
+  .hero p {
+    color: var(--color-gray-500);
+    font-size: var(--font-base);
+    max-width: 36rem;
+    margin-bottom: 0;
+  }
+
+  /* ── Filtros ───────────────────────────────────────── */
+  .filters-bar {
+    background: var(--color-white);
+    border-bottom: 1px solid var(--color-gray-200);
+    padding: var(--space-3) 0;
+    position: sticky;
+    top: 57px; /* altura del site-header */
+    z-index: 40;
+  }
+
+  .filters-inner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+  .filter-label {
+    font-size: var(--font-xs);
+    color: var(--color-gray-500);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .filter-chips { display: flex; gap: var(--space-1); flex-wrap: wrap; }
+
+  .filter-chip {
+    font-size: var(--font-xs);
+    font-weight: 500;
+    padding: 0.2rem var(--space-3);
+    border: 1px solid var(--color-gray-200);
+    border-radius: 2rem;
+    background: transparent;
+    color: var(--color-gray-700);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+
+  .filter-chip:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: var(--color-primary-light);
+  }
+
+  .filter-chip.active {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #ffffff;
+  }
+
+  .result-count {
+    margin-left: auto;
+    font-size: var(--font-xs);
+    color: var(--color-gray-500);
+  }
+
+  /* ── Tools content ─────────────────────────────────── */
+  .tools-content { padding: var(--space-8) 0; }
+
+  [data-hidden="true"] { display: none; }
+</style>
+
+<script>
+  // ── Lógica de filtros ────────────────────────────────
+  const chips      = document.querySelectorAll<HTMLButtonElement>('.filter-chip');
+  const cardWraps  = document.querySelectorAll<HTMLElement>('[data-cats]');
+  const sections   = document.querySelectorAll<HTMLElement>('[data-section]');
+  const countEl    = document.getElementById('result-count');
+
+  function applyFilter(filter: string) {
+    let visible = 0;
+
+    cardWraps.forEach(wrap => {
+      const cats = (wrap.dataset.cats || '').split(' ');
+      const show = filter === 'all' || cats.includes(filter);
+      wrap.dataset.hidden = show ? 'false' : 'true';
+      if (show) visible++;
+    });
+
+    // Ocultar secciones sin tarjetas visibles
+    sections.forEach(section => {
+      const sectionCats = (section.dataset.section || '').split(' ');
+      const show = filter === 'all' || sectionCats.includes(filter);
+      (section as HTMLElement).style.display = show ? '' : 'none';
+    });
+
+    if (countEl) {
+      countEl.textContent = `${visible} herramienta${visible !== 1 ? 's' : ''}`;
+    }
+  }
+
+  chips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      chips.forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      applyFilter(chip.dataset.filter || 'all');
+    });
+  });
+</script>

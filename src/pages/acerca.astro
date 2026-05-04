@@ -1,0 +1,58 @@
+---
+// src/pages/acerca.astro
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Acerca" description="Qué es edetools y para quién está pensado.">
+  <div class="page-hero">
+    <div class="container">
+      <h1>Acerca de edetools</h1>
+      <p>Herramientas construidas desde el flujo de trabajo real.</p>
+    </div>
+  </div>
+
+  <div class="page-body">
+    <div class="container">
+      <div class="prose">
+        <p>
+          <strong>edetools</strong> nació como un conjunto de utilidades internas para resolver
+          tareas repetitivas en el trabajo diario de gráfica e impresión. Con el tiempo, las
+          herramientas se fueron refinando hasta el punto de ser útiles más allá del flujo
+          de trabajo propio.
+        </p>
+        <p>
+          El objetivo es que imprentas, rúbrográficas y centros de copiado puedan acceder
+          a herramientas prácticas sin necesidad de instalar software, sin curvas de aprendizaje
+          y sin depender de soluciones genéricas que no contemplan las particularidades del rubro.
+        </p>
+        <h2>Filosofía</h2>
+        <p>
+          Cada herramienta resuelve una sola cosa y la resuelve bien. Sin distracciones,
+          sin funcionalidades innecesarias. El foco está en la velocidad de uso en contextos
+          de trabajo real.
+        </p>
+        <h2>Stack técnico</h2>
+        <p>
+          Las herramientas client-side corren enteramente en el navegador: no se sube ningún
+          archivo a ningún servidor. Las herramientas que requieren procesamiento pesado se
+          distribuyen como scripts locales.
+        </p>
+      </div>
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .page-hero {
+    background: var(--color-primary);
+    padding: var(--space-8) 0;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .page-hero h1 { color: #fff; font-size: var(--font-3xl); margin-bottom: var(--space-2); }
+  .page-hero p  { color: var(--color-gray-500); margin-bottom: 0; }
+
+  .page-body { padding: var(--space-8) 0; }
+
+  .prose { max-width: 42rem; }
+  .prose h2 { margin-top: var(--space-8); color: var(--color-primary); }
+</style>

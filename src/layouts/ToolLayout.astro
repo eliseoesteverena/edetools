@@ -1,0 +1,133 @@
+---
+// src/layouts/ToolLayout.astro
+// Layout para páginas de herramientas individuales.
+// Extiende BaseLayout agregando:
+//   - breadcrumb automático
+//   - header de herramienta (título, descripción, tags)
+//   - área de contenido con sidebar opcional
+
+import BaseLayout from './BaseLayout.astro';
+
+interface Tag {
+  label: string;
+  type: string;
+}
+
+interface Props {
+  title: string;
+  description?: string;
+  icon?: string;
+  tags?: Tag[];
+}
+
+const {
+  title,
+  description = '',
+  icon = '🔧',
+  tags = [],
+} = Astro.props;
+---
+
+<BaseLayout title={title} description={description} toolPage={true}>
+
+  <!-- Slot para breadcrumb en BaseLayout -->
+  <Fragment slot="breadcrumb">{title}</Fragment>
+
+  <!-- Hero de la herramienta -->
+  <div class="tool-hero">
+    <div class="container">
+      <div class="tool-hero-inner">
+        <span class="tool-hero-icon" aria-hidden="true">{icon}</span>
+        <div>
+          <h1 class="tool-hero-title">{title}</h1>
+          {description && <p class="tool-hero-desc">{description}</p>}
+          {tags.length > 0 && (
+            <ul class="tool-hero-tags" aria-label="Categorías">
+              {tags.map(t => (
+                <li class:list={['tag', `tag--${t.type}`]}>{t.label}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contenido de la página -->
+  <div class="tool-body">
+    <div class="container">
+      <slot />
+    </div>
+  </div>
+
+</BaseLayout>
+
+<style>
+  /* ── Hero ─────────────────────────────────────────── */
+  .tool-hero {
+    background: var(--color-primary);
+    padding: var(--space-6) 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .tool-hero-inner {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-4);
+  }
+
+  .tool-hero-icon {
+    font-size: 2rem;
+    line-height: 1;
+    margin-top: 0.2rem;
+    flex-shrink: 0;
+  }
+
+  .tool-hero-title {
+    font-size: var(--font-2xl);
+    font-weight: 700;
+    color: #ffffff;
+    margin-bottom: var(--space-1);
+    letter-spacing: -0.02em;
+  }
+
+  .tool-hero-desc {
+    color: var(--color-gray-500);
+    font-size: var(--font-sm);
+    max-width: 42rem;
+    margin-bottom: var(--space-2);
+  }
+
+  .tool-hero-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  /* ── Body ──────────────────────────────────────────── */
+  .tool-body {
+    padding: var(--space-8) 0;
+  }
+
+  /* Tags — mismos estilos que ToolCard */
+  .tag {
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 0.15rem 0.45rem;
+    border-radius: var(--radius-sm);
+  }
+
+  .tag--print  { background: #dcfce7; color: #166534; }
+  .tag--pdf    { background: #fdecea; color: #991b1b; }
+  .tag--img    { background: #ede9fe; color: #5b21b6; }
+  .tag--web    { background: #dbeafe; color: #1e40af; }
+  .tag--email  { background: #fef3c7; color: #92400e; }
+  .tag--python { background: #fef9c3; color: #713f12; }
+  .tag--php    { background: #f3e8ff; color: #6b21a8; }
+  .tag--local  { background: rgba(255,255,255,0.08); color: var(--color-gray-500); }
+</style>
