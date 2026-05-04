@@ -36,34 +36,52 @@ const {
   pro = false,
 } = Astro.props;
 
-const statusLabel   = { live: 'Disponible', dev: 'En desarrollo', pending: 'Próximamente' }[status];
-const isClickable   = status === 'live' && !!href;
-const Tag = isClickable ? 'a' : 'div';
+const statusLabel = { live: 'Disponible', dev: 'En desarrollo', pending: 'Próximamente' }[status];
+const isClickable = status === 'live' && !!href;
+
+// Contenido interno compartido — se reutiliza en ambas ramas
 ---
 
-<{Tag}
-  class:list={['tool-card', { 'tool-card--live': isClickable, 'tool-card--disabled': !isClickable }]}
-  href={isClickable ? href : undefined}
-  aria-label={isClickable ? title : undefined}
->
-  {pro && <span class="card-badge-pro" aria-label="Herramienta Pro">PRO</span>}
-
-  <div class="card-header">
-    <span class="card-icon" aria-hidden="true">{icon}</span>
-    <span class:list={['card-status', `card-status--${status}`]}>{statusLabel}</span>
+{/* Tarjeta clicable: usa <a> */}
+{isClickable ? (
+  <a
+    href={href}
+    class="tool-card tool-card--live"
+    aria-label={title}
+  >
+    {pro && <span class="card-badge-pro" aria-label="Herramienta Pro">PRO</span>}
+    <div class="card-header">
+      <span class="card-icon" aria-hidden="true">{icon}</span>
+      <span class:list={['card-status', `card-status--${status}`]}>{statusLabel}</span>
+    </div>
+    <p class="card-title">{title}</p>
+    <p class="card-desc">{description}</p>
+    {tags.length > 0 && (
+      <ul class="card-tags" aria-label="Categorías">
+        {tags.map(t => (
+          <li class:list={['tag', `tag--${t.type}`]}>{t.label}</li>
+        ))}
+      </ul>
+    )}
+  </a>
+) : (
+  <div class="tool-card tool-card--disabled">
+    {pro && <span class="card-badge-pro" aria-label="Herramienta Pro">PRO</span>}
+    <div class="card-header">
+      <span class="card-icon" aria-hidden="true">{icon}</span>
+      <span class:list={['card-status', `card-status--${status}`]}>{statusLabel}</span>
+    </div>
+    <p class="card-title">{title}</p>
+    <p class="card-desc">{description}</p>
+    {tags.length > 0 && (
+      <ul class="card-tags" aria-label="Categorías">
+        {tags.map(t => (
+          <li class:list={['tag', `tag--${t.type}`]}>{t.label}</li>
+        ))}
+      </ul>
+    )}
   </div>
-
-  <p class="card-title">{title}</p>
-  <p class="card-desc">{description}</p>
-
-  {tags.length > 0 && (
-    <ul class="card-tags" aria-label="Categorías">
-      {tags.map(t => (
-        <li class:list={['tag', `tag--${t.type}`]}>{t.label}</li>
-      ))}
-    </ul>
-  )}
-</{Tag}>
+)}
 
 <style>
   .tool-card {
