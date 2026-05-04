@@ -1,24 +1,17 @@
 // src/pages/api/extraer-primera-pagina.ts
 //
-// Cloudflare Function (Pages Functions via Astro hybrid mode).
-// Equivalente al process.php original.
+// Cloudflare Function — reemplaza process.php
 //
-// Flujo por archivo:
-//   1. Intenta copiar la página con pdf-lib (equivalente a FPDI)
-//   2. Si falla, rasteriza con MuPDF WASM a PNG y la embebe (equivalente a Imagick)
-//
-// Límites de Cloudflare Workers a tener en cuenta:
-//   - CPU time: 50ms en plan gratuito, 30s en plan Paid
-//   - Memory: 128MB
-//   - Request body: 100MB máx
-//
-// Para lotes grandes o PDFs muy pesados considerar el plan Paid.
+// Estrategia por archivo:
+//   1. pdf-lib  → copia la página como XObject (equivalente a FPDI)
+//   2. pdfjs-dist + OffscreenCanvas → rasteriza a PNG si pdf-lib falla
+//      (equivalente al fallback Imagick del PHP original)
 
-import { PDFDocument } from 'pdf-lib';
+import { PDFDocument, rgb } from 'pdf-lib';
 
-export const prerender = false; // Este endpoint es dinámico, no estático
+export const prerender = false;
 
-// ── Tipos ────────────────────────────────────────────────────────────────────
+// ── Tipos ─────────────────────────────────────────────────────────────────────
 
 interface LogEntry {
   type: 'ok' | 'info' | 'warn' | 'error';
@@ -26,7 +19,7 @@ interface LogEntry {
 }
 
 interface SuccessResponse {
-  pdf: string;       // base64
+  pdf: string;
   pages: number;
   failed: string[];
   log: LogEntry[];
@@ -37,19 +30,15 @@ interface ErrorResponse {
   log?: LogEntry[];
 }
 
-// ── Helper: intentar extracción directa con pdf-lib ──────────────────────────
-// Equivalente a extract_first_page_fpdi() en PHP.
-// pdf-lib copia la página como XObject — funciona en la mayoría de los PDFs.
+// ── Intento 1: pdf-lib (copia directa) ────────────────────────────────────────
 
 async function tryPdfLib(
   outputDoc: PDFDocument,
   fileBytes: Uint8Array,
 ): Promise<boolean> {
   try {
-    const srcDoc = await PDFDocument.load(fileBytes, {
-      // Ignorar errores de encriptación parcial para intentar igual
-      ignoreEncryption: true,
-    });
+    const srcDoc = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
+    if (srcDoc.getPageCount() === 0) return false;
     const [firstPage] = await outputDoc.copyPages(srcDoc, [0]);
     outputDoc.addPage(firstPage);
     return true;
@@ -58,63 +47,53 @@ async function tryPdfLib(
   }
 }
 
-// ── Helper: rasterizar con MuPDF WASM ────────────────────────────────────────
-// Equivalente a rasterize_and_extract() con Imagick en PHP.
-// Renderiza la página a PNG y la embebe como imagen en el PDF de salida.
-// Se usa como fallback cuando pdf-lib no puede copiar la página directamente.
+// ── Intento 2: pdfjs-dist + OffscreenCanvas (rasterización) ───────────────────
+// OffscreenCanvas está disponible en Cloudflare Workers desde 2023.
+// pdfjs-dist se importa dinámicamente para que Vite no intente bundlearlo
+// en el paso de build (donde no hay entorno Worker).
 
-async function tryMuPDF(
+async function tryPdfjsRaster(
   outputDoc: PDFDocument,
   fileBytes: Uint8Array,
 ): Promise<boolean> {
   try {
-    // Importación dinámica — MuPDF es WASM y carga de forma asíncrona
-    // @ts-ignore — tipado no incluido en el paquete
-    const mupdf = await import('mupdf');
-    await mupdf.ready;
+    // Importación dinámica — evita problemas de bundle en build time
+    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
 
-    // Abrir el documento
-    const doc = mupdf.Document.openDocument(fileBytes, 'application/pdf');
-    const page = doc.loadPage(0); // página 0 = primera
+    // Workers no tiene sistema de archivos — deshabilitar el worker thread de pdfjs
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
 
-    // Renderizar a 150 DPI (equivalente a la resolución del PHP)
-    // Matrix de escala: 150/72 ≈ 2.0833
-    const scale = 150 / 72;
-    const matrix = mupdf.Matrix.scale(scale, scale);
-    const pixmap = page.toPixmap(matrix, mupdf.ColorSpace.DeviceRGB, false, true);
+    const loadingTask = pdfjsLib.getDocument({ data: fileBytes, useWorkerFetch: false, isEvalSupported: false });
+    const pdfDoc = await loadingTask.promise;
+    const page   = await pdfDoc.getPage(1);
+
+    // Resolución equivalente a 150dpi
+    const scale    = 150 / 72;
+    const viewport = page.getViewport({ scale });
+
+    // OffscreenCanvas — disponible en Cloudflare Workers
+    const canvas  = new OffscreenCanvas(
+      Math.round(viewport.width),
+      Math.round(viewport.height),
+    );
+    const context = canvas.getContext('2d') as OffscreenCanvasRenderingContext2D;
+
+    await page.render({ canvasContext: context as any, viewport }).promise;
 
     // Exportar a PNG como ArrayBuffer
-    const pngData: Uint8Array = pixmap.asPNG();
+    const blob      = await canvas.convertToBlob({ type: 'image/png' });
+    const arrayBuf  = await blob.arrayBuffer();
+    const pngBytes  = new Uint8Array(arrayBuf);
 
-    // Dimensiones originales en puntos (1pt = 1/72 inch)
-    const bounds = page.getBounds();
-    const widthPt  = bounds[2] - bounds[0];
-    const heightPt = bounds[3] - bounds[1];
+    // Dimensiones originales en puntos
+    const origViewport = page.getViewport({ scale: 1 });
+    const widthPt  = origViewport.width;
+    const heightPt = origViewport.height;
 
-    // Convertir a mm para las dimensiones de la página PDF de salida
-    const widthMm  = (widthPt  / 72) * 25.4;
-    const heightMm = (heightPt / 72) * 25.4;
-
-    // Embeber el PNG en el PDF de salida
-    const pngImage = await outputDoc.embedPng(pngData);
-    const newPage  = outputDoc.addPage(
-      [widthMm, heightMm],           // tamaño en puntos (pdf-lib usa pts internamente)
-      // pdf-lib usa puntos: convertir mm -> pts
-      // width = widthMm / 25.4 * 72, pero addPage acepta pts directamente
-    );
-
-    // Dibujar la imagen ocupando toda la página
-    newPage.drawImage(pngImage, {
-      x:      0,
-      y:      0,
-      width:  widthPt,
-      height: heightPt,
-    });
-
-    // Cleanup
-    pixmap.destroy();
-    page.destroy();
-    doc.destroy();
+    // Embeber PNG en el documento de salida
+    const pngImage = await outputDoc.embedPng(pngBytes);
+    const newPage  = outputDoc.addPage([widthPt, heightPt]);
+    newPage.drawImage(pngImage, { x: 0, y: 0, width: widthPt, height: heightPt });
 
     return true;
   } catch {
@@ -122,33 +101,26 @@ async function tryMuPDF(
   }
 }
 
-// ── Handler principal ────────────────────────────────────────────────────────
+// ── Handler principal ──────────────────────────────────────────────────────────
 
 export async function POST({ request }: { request: Request }): Promise<Response> {
   const log: LogEntry[] = [];
-
   const addLog = (type: LogEntry['type'], msg: string) => log.push({ type, msg });
 
-  // Parsear el multipart/form-data
   let formData: FormData;
   try {
     formData = await request.formData();
-  } catch (e: any) {
-    return jsonResponse({ error: 'No se pudo parsear el formulario.', log }, 400);
+  } catch {
+    return jsonResponse({ error: 'No se pudo parsear el formulario.' }, 400);
   }
 
-  // Orden de procesamiento
   const orderRaw = formData.get('order');
-  const order: string[] = orderRaw
-    ? JSON.parse(orderRaw as string)
-    : [];
+  const order: string[] = orderRaw ? JSON.parse(orderRaw as string) : [];
 
-  // Recopilar archivos
   const uploaded = new Map<string, Uint8Array>();
   for (const [key, value] of formData.entries()) {
     if (key === 'pdfs[]' && value instanceof File) {
-      const ab = await value.arrayBuffer();
-      uploaded.set(value.name, new Uint8Array(ab));
+      uploaded.set(value.name, new Uint8Array(await value.arrayBuffer()));
     }
   }
 
@@ -156,38 +128,27 @@ export async function POST({ request }: { request: Request }): Promise<Response>
     return jsonResponse({ error: 'No se recibieron archivos.' }, 400);
   }
 
-  // Documento de salida
-  const outputDoc = await PDFDocument.create();
-  let processed = 0;
+  const outputDoc   = await PDFDocument.create();
+  let processed     = 0;
   const failed: string[] = [];
-
-  // Procesar en el orden indicado por el frontend
   const processOrder = order.length > 0 ? order : [...uploaded.keys()];
 
   for (const name of processOrder) {
     const bytes = uploaded.get(name);
-    if (!bytes) {
-      addLog('warn', `No encontrado: ${name}`);
-      continue;
-    }
+    if (!bytes) { addLog('warn', `No encontrado: ${name}`); continue; }
 
     addLog('info', `Procesando: ${name}`);
 
-    // Intento 1: pdf-lib (copia directa, sin rasterizar)
+    // Intento 1
     let ok = await tryPdfLib(outputDoc, bytes);
+    if (ok) { addLog('ok', `OK (pdf-lib): ${name}`); processed++; continue; }
+
+    // Intento 2
+    addLog('info', `Fallback rasterización: ${name}`);
+    ok = await tryPdfjsRaster(outputDoc, bytes);
 
     if (ok) {
-      addLog('ok', `OK (pdf-lib): ${name}`);
-      processed++;
-      continue;
-    }
-
-    // Intento 2: MuPDF WASM (rasterización)
-    addLog('info', `Fallback MuPDF: ${name}`);
-    ok = await tryMuPDF(outputDoc, bytes);
-
-    if (ok) {
-      addLog('ok', `OK (mupdf): ${name}`);
+      addLog('ok', `OK (rasterizado): ${name}`);
       processed++;
     } else {
       addLog('error', `No procesado: ${name}`);
@@ -196,21 +157,16 @@ export async function POST({ request }: { request: Request }): Promise<Response>
   }
 
   if (processed === 0) {
-    return jsonResponse(
-      { error: 'Ningún archivo pudo procesarse.', log },
-      422,
-    );
+    return jsonResponse({ error: 'Ningún archivo pudo procesarse.', log }, 422);
   }
 
-  // Serializar el PDF de salida
   const pdfBytes = await outputDoc.save();
-  const b64 = uint8ToBase64(pdfBytes);
+  const b64      = uint8ToBase64(pdfBytes);
 
-  const response: SuccessResponse = { pdf: b64, pages: processed, failed, log };
-  return jsonResponse(response, 200);
+  return jsonResponse({ pdf: b64, pages: processed, failed, log }, 200);
 }
 
-// ── Utilidades ───────────────────────────────────────────────────────────────
+// ── Utilidades ────────────────────────────────────────────────────────────────
 
 function jsonResponse(body: SuccessResponse | ErrorResponse, status: number): Response {
   return new Response(JSON.stringify(body), {
@@ -222,7 +178,6 @@ function jsonResponse(body: SuccessResponse | ErrorResponse, status: number): Re
   });
 }
 
-// btoa no maneja Uint8Array directamente en todos los entornos
 function uint8ToBase64(bytes: Uint8Array): string {
   let binary = '';
   const chunk = 8192;
@@ -232,7 +187,6 @@ function uint8ToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
-// Preflight CORS (por si el browser lo requiere)
 export async function OPTIONS(): Promise<Response> {
   return new Response(null, {
     status: 204,

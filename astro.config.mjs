@@ -2,14 +2,19 @@ import { defineConfig } from 'astro/config';
 import cloudflare from '@astrojs/cloudflare';
 
 export default defineConfig({
-  // output: 'hybrid' permite que la mayoría del sitio sea estático
-  // pero habilita endpoints de servidor (las Functions/Workers)
-  // para las rutas que lo necesiten (como el API de PDF).
   output: 'hybrid',
   adapter: cloudflare({
-    platformProxy: {
-      enabled: true, // habilita wrangler en dev local
-    },
+    platformProxy: { enabled: true },
   }),
   site: 'https://edetools.pages.dev',
+  vite: {
+    // pdfjs-dist tiene referencias a Node built-ins en rutas que no usamos.
+    // Marcarlos como externos evita que Vite intente bundlearlos.
+    ssr: {
+      external: ['pdfjs-dist'],
+    },
+    optimizeDeps: {
+      exclude: ['pdfjs-dist'],
+    },
+  },
 });
