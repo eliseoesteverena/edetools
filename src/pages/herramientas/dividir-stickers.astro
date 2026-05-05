@@ -1,0 +1,941 @@
+---
+// src/pages/herramientas/dividir-stickers.astro
+import ToolLayout from '../../layouts/ToolLayout.astro';
+---
+
+<ToolLayout
+  title="Dividir stickers"
+  description="Cargá una imagen con múltiples stickers, dibujá los recortes y exportá cada uno como PNG individual en un ZIP."
+  icon="🪄"
+  tags={[
+    { label: 'imagen', type: 'img' },
+    { label: 'client-side', type: 'web' },
+  ]}
+>
+
+  <!-- Fabric.js, JSZip y FileSaver desde CDN -->
+  <script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+  <script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+  <!-- ── UPLOAD MODE ─────────────────────────────────── -->
+  <div class="upload-panel" id="uploadPanel">
+    <div class="drop-zone" id="uploadZone">
+      <input type="file" id="fileInput" accept="image/*" />
+      <span class="drop-icon" aria-hidden="true">⬆</span>
+      <p class="drop-text">Arrastrá tu imagen aquí o <span class="drop-link">hacé clic para seleccionar</span></p>
+      <p class="drop-hint">JPG, PNG, WebP · recomendado máx. 8K</p>
+    </div>
+  </div>
+
+  <!-- ── EDITOR MODE (oculto hasta cargar imagen) ─────── -->
+  <div class="editor" id="editor" hidden>
+
+    <!-- Barra superior -->
+    <div class="editor-bar">
+
+      <!-- Info de imagen -->
+      <div class="img-info">
+        <span class="info-item"><span class="info-label">Imagen</span><span class="info-value" id="imageName">—</span></span>
+        <span class="info-item"><span class="info-label">Resolución</span><span class="info-value" id="imageResolution">—</span></span>
+        <span class="info-item"><span class="info-label">Tamaño</span><span class="info-value" id="imageSize">—</span></span>
+      </div>
+
+      <!-- Modos -->
+      <div class="mode-btns">
+        <button class="btn-mode btn-mode--active" id="drawModeBtn"   type="button">✏️ Dibujar</button>
+        <button class="btn-mode"                  id="selectModeBtn" type="button">↖ Seleccionar</button>
+      </div>
+
+      <!-- Acciones rápidas -->
+      <div class="quick-actions">
+        <button class="btn-action" id="deleteSelectedBtn" type="button">🗑 Eliminar sel.</button>
+        <button class="btn-action" id="clearAllBtn"       type="button">✕ Limpiar todo</button>
+        <button class="btn-action btn-action--new"        id="newImageBtn" type="button">⟲ Nueva imagen</button>
+      </div>
+
+    </div>
+
+    <!-- Cuerpo del editor: canvas + sidebar -->
+    <div class="editor-body">
+
+      <!-- Canvas -->
+      <div class="canvas-wrap" id="canvasWrap">
+        <canvas id="c"></canvas>
+      </div>
+
+      <!-- Sidebar -->
+      <aside class="sidebar">
+
+        <!-- Zoom -->
+        <div class="side-card">
+          <h3 class="side-title">Zoom</h3>
+          <div class="zoom-row">
+            <button class="btn-zoom" id="zoomOutBtn"   type="button">−</button>
+            <input  class="zoom-slider" type="range" id="zoomSlider" min="10" max="400" value="100" step="10" />
+            <button class="btn-zoom" id="zoomInBtn"    type="button">+</button>
+          </div>
+          <div class="zoom-display">
+            <span class="zoom-value" id="zoomValue">100%</span>
+            <button class="btn-zoom-reset" id="zoomResetBtn" type="button">Reset</button>
+          </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="side-card">
+          <h3 class="side-title">Estadísticas</h3>
+          <div class="stats-grid">
+            <div class="stat-card">
+              <div class="stat-label">Recortes</div>
+              <div class="stat-value" id="cropCount">0</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-label">Área (px²)</div>
+              <div class="stat-value" id="totalArea">0</div>
+            </div>
+            <div class="stat-card stat-card--full">
+              <div class="stat-label">Tamaño estimado</div>
+              <div class="stat-value stat-value--sm" id="estimatedSize">0 KB</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Progreso de exportación -->
+        <div class="progress-card" id="progressContainer">
+          <p class="progress-label">Exportando…</p>
+          <div class="progress-track">
+            <div class="progress-fill" id="progressFill"></div>
+            <span class="progress-text" id="progressText">0%</span>
+          </div>
+        </div>
+
+        <!-- Exportar -->
+        <div class="side-card">
+          <button class="btn-export" id="exportBtn" type="button" disabled>
+            ↓ Exportar ZIP
+          </button>
+        </div>
+
+      </aside>
+    </div>
+  </div>
+
+</ToolLayout>
+
+<style>
+  /* ── Upload panel ───────────────────────────────── */
+  .upload-panel { max-width: 600px; }
+
+  .drop-zone {
+    position: relative;
+    border: 2px dashed var(--color-gray-200);
+    border-radius: var(--radius-lg);
+    padding: var(--space-8) var(--space-6);
+    text-align: center;
+    cursor: pointer;
+    background: var(--color-white);
+    transition: border-color 0.2s, background 0.2s, transform 0.15s;
+  }
+
+  .drop-zone:hover,
+  .drop-zone.dragover {
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
+    transform: translateY(-2px);
+  }
+
+  .drop-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .drop-icon { font-size: 2.5rem; display: block; margin-bottom: var(--space-3); }
+
+  .drop-text {
+    font-size: var(--font-base);
+    color: var(--color-gray-700);
+    margin-bottom: var(--space-1);
+    font-weight: 500;
+  }
+
+  .drop-link  { color: var(--color-primary); font-weight: 600; }
+
+  .drop-hint {
+    font-size: var(--font-xs);
+    color: var(--color-gray-500);
+    margin-bottom: 0;
+  }
+
+  /* ── Editor layout ───────────────────────────────── */
+  .editor {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--color-white);
+    /* Ocupa el espacio disponible de la ventana */
+    height: calc(100vh - 200px);
+    min-height: 560px;
+  }
+
+  /* ── Barra superior ──────────────────────────────── */
+  .editor-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-4);
+    border-bottom: 1px solid var(--color-gray-200);
+    background: var(--color-gray-50);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    row-gap: var(--space-2);
+  }
+
+  .img-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    flex-wrap: wrap;
+  }
+
+  .info-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .info-label {
+    font-size: var(--font-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-gray-500);
+  }
+
+  .info-value {
+    font-size: var(--font-xs);
+    color: var(--color-gray-900);
+    font-weight: 500;
+  }
+
+  /* Modo dibujar/seleccionar */
+  .mode-btns {
+    display: flex;
+    gap: 2px;
+    background: var(--color-gray-200);
+    border-radius: var(--radius-md);
+    padding: 2px;
+  }
+
+  .btn-mode {
+    font-size: var(--font-xs);
+    font-weight: 500;
+    padding: var(--space-1) var(--space-3);
+    border: none;
+    border-radius: calc(var(--radius-md) - 2px);
+    background: transparent;
+    color: var(--color-gray-700);
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
+  }
+
+  .btn-mode--active {
+    background: var(--color-white);
+    color: var(--color-primary);
+    font-weight: 600;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  }
+
+  /* Acciones rápidas */
+  .quick-actions {
+    display: flex;
+    gap: var(--space-2);
+    margin-left: auto;
+    flex-wrap: wrap;
+  }
+
+  .btn-action {
+    font-size: var(--font-xs);
+    font-weight: 500;
+    padding: var(--space-1) var(--space-3);
+    background: var(--color-white);
+    color: var(--color-gray-700);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-family: inherit;
+    white-space: nowrap;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+  }
+
+  .btn-action:hover        { border-color: var(--color-primary); color: var(--color-primary); }
+  .btn-action--new:hover   { border-color: var(--color-gray-700); color: var(--color-gray-700); }
+
+  /* ── Editor body ─────────────────────────────────── */
+  .editor-body {
+    display: grid;
+    grid-template-columns: 1fr 220px;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  @media (max-width: 768px) {
+    .editor-body { grid-template-columns: 1fr; }
+    .sidebar { flex-direction: row; flex-wrap: wrap; max-height: 180px; overflow-y: auto; }
+  }
+
+  /* ── Canvas area ─────────────────────────────────── */
+  .canvas-wrap {
+    overflow: auto;
+    background: var(--color-gray-100);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: var(--space-4);
+  }
+
+  .canvas-wrap canvas {
+    display: block;
+    box-shadow: 0 2px 16px rgba(0,0,0,0.12);
+  }
+
+  /* ── Sidebar ─────────────────────────────────────── */
+  .sidebar {
+    border-left: 1px solid var(--color-gray-200);
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow-y: auto;
+    background: var(--color-white);
+  }
+
+  .side-card {
+    padding: var(--space-4);
+    border-bottom: 1px solid var(--color-gray-200);
+  }
+
+  .side-title {
+    font-size: var(--font-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-gray-500);
+    margin-bottom: var(--space-3);
+  }
+
+  /* ── Zoom ───────────────────────────────────────── */
+  .zoom-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+  }
+
+  .btn-zoom {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: var(--color-gray-100);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-md);
+    font-size: var(--font-base);
+    font-weight: 700;
+    color: var(--color-gray-700);
+    cursor: pointer;
+    font-family: inherit;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: background 0.15s;
+  }
+
+  .btn-zoom:hover { background: var(--color-gray-200); }
+
+  .zoom-slider {
+    flex: 1;
+    height: 6px;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+    box-shadow: none;
+    width: auto;
+  }
+
+  .zoom-slider:focus { box-shadow: none; outline: none; }
+
+  .zoom-display {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .zoom-value {
+    font-size: var(--font-sm);
+    font-weight: 700;
+    color: var(--color-primary);
+  }
+
+  .btn-zoom-reset {
+    font-size: var(--font-xs);
+    padding: 2px var(--space-2);
+    background: none;
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-sm);
+    color: var(--color-gray-500);
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s;
+  }
+
+  .btn-zoom-reset:hover { background: var(--color-gray-100); color: var(--color-gray-900); }
+
+  /* ── Stats ───────────────────────────────────────── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-2);
+  }
+
+  .stat-card {
+    background: var(--color-gray-50);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-md);
+    padding: var(--space-2) var(--space-3);
+    text-align: center;
+  }
+
+  .stat-card--full { grid-column: 1 / -1; }
+
+  .stat-label {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-gray-500);
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+
+  .stat-value {
+    font-size: var(--font-xl);
+    font-weight: 700;
+    color: var(--color-primary);
+    line-height: 1.2;
+  }
+
+  .stat-value--sm { font-size: var(--font-base); }
+
+  /* ── Progress ────────────────────────────────────── */
+  .progress-card {
+    display: none;
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-gray-200);
+    background: var(--color-primary-light);
+  }
+
+  .progress-card.active { display: block; }
+
+  .progress-label {
+    font-size: var(--font-xs);
+    font-weight: 500;
+    color: var(--color-gray-700);
+    margin-bottom: var(--space-2);
+  }
+
+  .progress-track {
+    position: relative;
+    height: 20px;
+    background: var(--color-gray-200);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    width: 0%;
+    background: var(--color-primary);
+    transition: width 0.3s;
+  }
+
+  .progress-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: var(--font-xs);
+    font-weight: 600;
+    color: var(--color-gray-900);
+  }
+
+  /* ── Export button ───────────────────────────────── */
+  .btn-export {
+    width: 100%;
+    padding: var(--space-3);
+    background: var(--color-accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--font-sm);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+  }
+
+  .btn-export:hover:not(:disabled)  { background: #c0303b; }
+  .btn-export:active:not(:disabled) { transform: scale(0.98); }
+
+  .btn-export:disabled {
+    background: var(--color-gray-200);
+    color: var(--color-gray-500);
+    cursor: not-allowed;
+  }
+</style>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// NOTA DE ADAPTACIÓN
+// La lógica de zoom, coordenadas y exportación se conserva
+// íntegra del original. Ver análisis en el commit correspondiente.
+//
+// Variables críticas — NO modificar su lógica:
+//   baseScale   = canvasWidth / imgWidth  (fijo al cargar)
+//   currentZoom = factor zoom usuario     (varía con slider)
+//   applyZoom() rescala imagen Y rects en paralelo (zoomRatio)
+//   exportCrops() convierte coords canvas → imagen original
+// ════════════════════════════════════════════════════════════
+
+(function () {
+  // ── Variables globales ────────────────────────────────────
+  let fabricCanvas: any;
+  let originalImage: any;
+  let originalImageElement: HTMLImageElement;
+  let isDrawing     = false;
+  let drawStartPoint: { x: number; y: number } | null = null;
+  let currentRect: any = null;
+  let rectCounter   = 0;
+  let isDrawMode    = false;
+
+  // Zoom — las tres variables que gobiernan el sistema de coordenadas
+  let currentZoom = 1.0;
+  let baseScale   = 1.0;
+
+  // Límites del canvas
+  const MAX_CANVAS_WIDTH  = 1200;
+  const MAX_CANVAS_HEIGHT = 800;
+
+  // Estilo de los rectángulos de recorte
+  const RECT_FILL         = 'rgba(26, 26, 46, 0.08)';
+  const RECT_STROKE       = '#1a1a2e';
+  const RECT_STROKE_WIDTH = 2;
+
+  // ── DOM refs ──────────────────────────────────────────────
+  const uploadPanel       = document.getElementById('uploadPanel')       as HTMLDivElement;
+  const uploadZone        = document.getElementById('uploadZone')        as HTMLDivElement;
+  const fileInput         = document.getElementById('fileInput')         as HTMLInputElement;
+  const editorEl          = document.getElementById('editor')            as HTMLDivElement;
+  const drawModeBtn       = document.getElementById('drawModeBtn')       as HTMLButtonElement;
+  const selectModeBtn     = document.getElementById('selectModeBtn')     as HTMLButtonElement;
+  const deleteSelectedBtn = document.getElementById('deleteSelectedBtn') as HTMLButtonElement;
+  const clearAllBtn       = document.getElementById('clearAllBtn')       as HTMLButtonElement;
+  const exportBtn         = document.getElementById('exportBtn')         as HTMLButtonElement;
+  const newImageBtn       = document.getElementById('newImageBtn')       as HTMLButtonElement;
+  const progressContainer = document.getElementById('progressContainer') as HTMLDivElement;
+  const progressFill      = document.getElementById('progressFill')      as HTMLDivElement;
+  const progressText      = document.getElementById('progressText')      as HTMLSpanElement;
+  const zoomInBtn         = document.getElementById('zoomInBtn')         as HTMLButtonElement;
+  const zoomOutBtn        = document.getElementById('zoomOutBtn')        as HTMLButtonElement;
+  const zoomResetBtn      = document.getElementById('zoomResetBtn')      as HTMLButtonElement;
+  const zoomSlider        = document.getElementById('zoomSlider')        as HTMLInputElement;
+  const zoomValue         = document.getElementById('zoomValue')         as HTMLSpanElement;
+  const imageName         = document.getElementById('imageName')         as HTMLSpanElement;
+  const imageResolution   = document.getElementById('imageResolution')   as HTMLSpanElement;
+  const imageSize         = document.getElementById('imageSize')         as HTMLSpanElement;
+  const cropCount         = document.getElementById('cropCount')         as HTMLSpanElement;
+  const totalArea         = document.getElementById('totalArea')         as HTMLSpanElement;
+  const estimatedSize     = document.getElementById('estimatedSize')     as HTMLSpanElement;
+
+  // ── Init ──────────────────────────────────────────────────
+  function init() {
+    uploadZone.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) handleFile(file);
+    });
+
+    uploadZone.addEventListener('dragover',  e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+    uploadZone.addEventListener('dragleave', ()  => uploadZone.classList.remove('dragover'));
+    uploadZone.addEventListener('drop', e => {
+      e.preventDefault();
+      uploadZone.classList.remove('dragover');
+      const file = e.dataTransfer?.files[0];
+      if (file) handleFile(file);
+    });
+
+    drawModeBtn.addEventListener('click',        activateDrawMode);
+    selectModeBtn.addEventListener('click',      activateSelectMode);
+    deleteSelectedBtn.addEventListener('click',  deleteSelected);
+    clearAllBtn.addEventListener('click',        clearAll);
+    exportBtn.addEventListener('click',          exportCrops);
+    newImageBtn.addEventListener('click',        resetApp);
+    zoomInBtn.addEventListener('click',          zoomIn);
+    zoomOutBtn.addEventListener('click',         zoomOut);
+    zoomResetBtn.addEventListener('click',       zoomReset);
+    zoomSlider.addEventListener('input',         handleZoomSlider);
+  }
+
+  // ── Carga de archivo ──────────────────────────────────────
+  function handleFile(file: File) {
+    if (!file.type.startsWith('image/')) {
+      alert('Seleccioná un archivo de imagen válido.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = e => loadImageToCanvas(e.target!.result as string, file);
+    reader.readAsDataURL(file);
+
+    imageName.textContent = file.name;
+    imageSize.textContent = formatFileSize(file.size);
+  }
+
+  function loadImageToCanvas(dataUrl: string, file: File) {
+    // @ts-ignore — Fabric.js cargado vía CDN
+    fabric.Image.fromURL(dataUrl, (img: any) => {
+      originalImage        = img;
+      originalImageElement = img.getElement() as HTMLImageElement;
+
+      const imgW = img.width  as number;
+      const imgH = img.height as number;
+
+      imageResolution.textContent = `${imgW} × ${imgH}`;
+
+      // Escalar el canvas si la imagen es demasiado grande
+      let canvasW = imgW;
+      let canvasH = imgH;
+      if (imgW > MAX_CANVAS_WIDTH || imgH > MAX_CANVAS_HEIGHT) {
+        const ratio = Math.min(MAX_CANVAS_WIDTH / imgW, MAX_CANVAS_HEIGHT / imgH);
+        canvasW = imgW * ratio;
+        canvasH = imgH * ratio;
+      }
+
+      // Limpiar canvas anterior si existe
+      if (fabricCanvas) fabricCanvas.dispose();
+
+      // @ts-ignore
+      fabricCanvas = new fabric.Canvas('c', { width: canvasW, height: canvasH, selection: true });
+
+      // ── baseScale: relación canvas/imagen original ──────────
+      // CRÍTICO: se calcula UNA SOLA VEZ y no cambia con el zoom
+      baseScale   = canvasW / imgW;
+      currentZoom = 1.0;
+
+      img.scale(baseScale);
+      img.selectable = false;
+      img.evented    = false;
+      fabricCanvas.add(img);
+      fabricCanvas.sendToBack(img);
+
+      // Mostrar editor, ocultar upload
+      uploadPanel.hidden = true;
+      editorEl.hidden    = false;
+
+      setupCanvasEvents();
+      activateDrawMode();
+
+      zoomSlider.value          = '100';
+      zoomValue.textContent     = '100%';
+
+      updateStats();
+    });
+  }
+
+  // ── Eventos del canvas ────────────────────────────────────
+  function setupCanvasEvents() {
+    fabricCanvas.on('mouse:down',        handleMouseDown);
+    fabricCanvas.on('mouse:move',        handleMouseMove);
+    fabricCanvas.on('mouse:up',          handleMouseUp);
+    fabricCanvas.on('selection:created', updateStats);
+    fabricCanvas.on('selection:updated', updateStats);
+    fabricCanvas.on('selection:cleared', updateStats);
+    fabricCanvas.on('object:modified',   updateStats);
+    fabricCanvas.on('object:added',      updateStats);
+    fabricCanvas.on('object:removed',    updateStats);
+  }
+
+  function handleMouseDown(o: any) {
+    if (!isDrawMode) return;
+    const pointer    = fabricCanvas.getPointer(o.e);
+    drawStartPoint   = pointer;
+    isDrawing        = true;
+
+    // @ts-ignore
+    currentRect = new fabric.Rect({
+      left:        pointer.x,
+      top:         pointer.y,
+      width:       0,
+      height:      0,
+      fill:        RECT_FILL,
+      stroke:      RECT_STROKE,
+      strokeWidth: RECT_STROKE_WIDTH,
+      selectable:  false,
+      hasControls: true,
+      hasBorders:  true,
+      cropId:      ++rectCounter,
+    });
+
+    fabricCanvas.add(currentRect);
+  }
+
+  function handleMouseMove(o: any) {
+    if (!isDrawing || !currentRect) return;
+    const pointer = fabricCanvas.getPointer(o.e);
+
+    currentRect.set({
+      left:   Math.min(drawStartPoint!.x, pointer.x),
+      top:    Math.min(drawStartPoint!.y, pointer.y),
+      width:  Math.abs(pointer.x - drawStartPoint!.x),
+      height: Math.abs(pointer.y - drawStartPoint!.y),
+    });
+
+    fabricCanvas.renderAll();
+  }
+
+  function handleMouseUp(_o: any) {
+    if (!isDrawing) return;
+    isDrawing = false;
+
+    if (currentRect) {
+      if (currentRect.width < 10 || currentRect.height < 10) {
+        fabricCanvas.remove(currentRect);
+      } else {
+        currentRect.set({ selectable: true });
+      }
+    }
+
+    currentRect    = null;
+    drawStartPoint = null;
+    updateStats();
+  }
+
+  // ── Modos ─────────────────────────────────────────────────
+  function activateDrawMode() {
+    isDrawMode              = true;
+    fabricCanvas.selection  = false;
+    fabricCanvas.forEachObject((obj: any) => {
+      if (obj !== originalImage) obj.selectable = false;
+    });
+    drawModeBtn.classList.add('btn-mode--active');
+    selectModeBtn.classList.remove('btn-mode--active');
+  }
+
+  function activateSelectMode() {
+    isDrawMode              = false;
+    fabricCanvas.selection  = true;
+    fabricCanvas.forEachObject((obj: any) => {
+      if (obj !== originalImage) obj.selectable = true;
+    });
+    selectModeBtn.classList.add('btn-mode--active');
+    drawModeBtn.classList.remove('btn-mode--active');
+  }
+
+  // ── Acciones ──────────────────────────────────────────────
+  function deleteSelected() {
+    const active = fabricCanvas.getActiveObjects();
+    active.forEach((obj: any) => {
+      if (obj !== originalImage) fabricCanvas.remove(obj);
+    });
+    fabricCanvas.discardActiveObject();
+    fabricCanvas.renderAll();
+    updateStats();
+  }
+
+  function clearAll() {
+    if (!confirm('¿Eliminar todos los recortes?')) return;
+    fabricCanvas.getObjects().forEach((obj: any) => {
+      if (obj !== originalImage) fabricCanvas.remove(obj);
+    });
+    fabricCanvas.renderAll();
+    updateStats();
+  }
+
+  // ── Estadísticas ──────────────────────────────────────────
+  function updateStats() {
+    if (!fabricCanvas) return;
+    const rects = fabricCanvas.getObjects('rect') as any[];
+    let totalAreaPx = 0;
+
+    rects.forEach((r: any) => {
+      totalAreaPx += (r.width * r.scaleX) * (r.height * r.scaleY);
+    });
+
+    cropCount.textContent     = String(rects.length);
+    totalArea.textContent     = Math.round(totalAreaPx).toLocaleString();
+    estimatedSize.textContent = formatFileSize(totalAreaPx * 3);
+    exportBtn.disabled        = rects.length === 0;
+  }
+
+  // ── Zoom ──────────────────────────────────────────────────
+  // CRÍTICO: applyZoom() mantiene la coherencia entre la imagen
+  // y todos los rectángulos escalando ambos por zoomRatio.
+  function applyZoom(zoomLevel: number) {
+    if (!fabricCanvas || !originalImage) return;
+
+    const oldZoom  = currentZoom;
+    currentZoom    = zoomLevel;
+    const zoomRatio = currentZoom / oldZoom;
+
+    // 1. Escalar la imagen
+    originalImage.scale(baseScale * currentZoom);
+
+    // 2. Escalar y reposicionar todos los rectángulos en paralelo
+    //    usando el mismo zoomRatio → los recortes permanecen alineados
+    const rects = fabricCanvas.getObjects('rect') as any[];
+    rects.forEach((rect: any) => {
+      rect.set({
+        left:   rect.left   * zoomRatio,
+        top:    rect.top    * zoomRatio,
+        scaleX: rect.scaleX * zoomRatio,
+        scaleY: rect.scaleY * zoomRatio,
+      });
+      rect.setCoords();
+    });
+
+    fabricCanvas.renderAll();
+
+    const pct = Math.round(currentZoom * 100);
+    zoomValue.textContent = pct + '%';
+    zoomSlider.value      = String(pct);
+  }
+
+  function zoomIn()    { applyZoom(Math.min(currentZoom + 0.1, 4.0)); }
+  function zoomOut()   { applyZoom(Math.max(currentZoom - 0.1, 0.1)); }
+  function zoomReset() { applyZoom(1.0); }
+
+  function handleZoomSlider(e: Event) {
+    applyZoom(parseInt((e.target as HTMLInputElement).value) / 100);
+  }
+
+  // ── Exportar ──────────────────────────────────────────────
+  // CRÍTICO: la conversión canvas → imagen original depende de
+  // baseScale y currentZoom. No modificar esta lógica.
+  async function exportCrops() {
+    const rects = fabricCanvas.getObjects('rect') as any[];
+    if (!rects.length) { alert('No hay recortes para exportar.'); return; }
+
+    progressContainer.classList.add('active');
+    exportBtn.disabled = true;
+
+    // @ts-ignore
+    const zip       = new JSZip();
+    const imgFolder = zip.folder('recortes');
+
+    // ── Factor de conversión canvas → pixels reales ──────────
+    // currentDisplayScale = baseScale * currentZoom
+    // → es la escala con la que la imagen se muestra en el canvas
+    // scaleX/Y = naturalWidth/Height / displayWidth/Height
+    // → convierte coordenadas de canvas a coordenadas de imagen original
+    const currentDisplayScale = baseScale * currentZoom;
+    const displayW = originalImage.width  * currentDisplayScale;
+    const displayH = originalImage.height * currentDisplayScale;
+    const scaleX   = originalImageElement.naturalWidth  / displayW;
+    const scaleY   = originalImageElement.naturalHeight / displayH;
+
+    for (let i = 0; i < rects.length; i++) {
+      const rect = rects[i];
+
+      // Tamaño visual del rect en el canvas (width * scaleX porque
+      // Fabric.js separa dimensión intrínseca de escala aplicada)
+      const dispW = rect.width  * rect.scaleX;
+      const dispH = rect.height * rect.scaleY;
+
+      // Convertir a coordenadas de la imagen original
+      const realX = rect.left * scaleX;
+      const realY = rect.top  * scaleY;
+      const realW = dispW     * scaleX;
+      const realH = dispH     * scaleY;
+
+      const tempCanvas        = document.createElement('canvas');
+      tempCanvas.width        = Math.round(realW);
+      tempCanvas.height       = Math.round(realH);
+      const ctx = tempCanvas.getContext('2d')!;
+
+      ctx.drawImage(
+        originalImageElement,
+        realX, realY, realW, realH,
+        0,     0,     realW, realH,
+      );
+
+      const blob: Blob = await new Promise(resolve =>
+        tempCanvas.toBlob(b => resolve(b!), 'image/png')
+      );
+
+      imgFolder!.file(`recorte_${String(i + 1).padStart(3, '0')}.png`, blob);
+
+      const pct = Math.round(((i + 1) / rects.length) * 100);
+      progressFill.style.width = pct + '%';
+      progressText.textContent = pct + '%';
+
+      // Yield al navegador para que no se congele la UI
+      await new Promise(r => setTimeout(r, 10));
+    }
+
+    progressText.textContent = 'Generando ZIP…';
+    // @ts-ignore
+    const content = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    // @ts-ignore
+    saveAs(content, 'stickers_recortados.zip');
+
+    setTimeout(() => {
+      progressContainer.classList.remove('active');
+      progressFill.style.width  = '0%';
+      progressText.textContent  = '0%';
+      exportBtn.disabled        = false;
+    }, 1000);
+  }
+
+  // ── Reset ─────────────────────────────────────────────────
+  function resetApp() {
+    if (!confirm('¿Cargar una nueva imagen? Se perderán los recortes actuales.')) return;
+
+    if (fabricCanvas) fabricCanvas.dispose();
+
+    editorEl.hidden    = true;
+    uploadPanel.hidden = false;
+
+    fileInput.value             = '';
+    imageName.textContent       = '—';
+    imageResolution.textContent = '—';
+    imageSize.textContent       = '—';
+
+    rectCounter  = 0;
+    isDrawMode   = false;
+    currentZoom  = 1.0;
+    baseScale    = 1.0;
+    zoomSlider.value     = '100';
+    zoomValue.textContent = '100%';
+
+    updateStats();
+  }
+
+  // ── Utilidades ────────────────────────────────────────────
+  function formatFileSize(bytes: number): string {
+    if (bytes === 0) return '0 B';
+    const k     = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i     = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  }
+
+  // ── Arranque ──────────────────────────────────────────────
+  init();
+})();
+</script>
