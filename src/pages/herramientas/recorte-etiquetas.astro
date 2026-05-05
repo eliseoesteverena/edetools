@@ -1,0 +1,497 @@
+---
+// src/pages/herramientas/recorte-etiquetas.astro
+import ToolLayout from '../../layouts/ToolLayout.astro';
+---
+
+<ToolLayout
+  title="Recorte de etiquetas de correo"
+  description="Recortá etiquetas de envío de Mercado Libre, Andreani y Correo Argentino. Cargá los PDFs, elegí el perfil y descargá las etiquetas optimizadas en un solo archivo."
+  icon="📦"
+  tags={[
+    { label: 'impresión', type: 'print' },
+    { label: 'pdf', type: 'pdf' },
+    { label: 'worker', type: 'web' },
+  ]}
+>
+
+  <div class="tool-wrap">
+
+    <!-- ── Drop zone ──────────────────────────────────── -->
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept=".pdf" multiple />
+      <span class="drop-icon" aria-hidden="true">📄</span>
+      <p class="drop-text">Arrastrá archivos PDF aquí o <span class="drop-link">hacé clic para seleccionar</span></p>
+      <p class="drop-hint">Soporta múltiples archivos · máx. 10 MB por archivo</p>
+    </div>
+
+    <!-- ── Lista de archivos ──────────────────────────── -->
+    <div class="file-list" id="fileList"></div>
+
+    <!-- ── Selector de perfil ─────────────────────────── -->
+    <div class="profiles" id="profiles" role="radiogroup" aria-label="Perfil de corte">
+
+      <div class="profile-card" data-profile="mercado_libre">
+        <input type="radio" name="profile" id="p_ml"  value="mercado_libre" />
+        <label for="p_ml">
+          <span class="profile-name">Mercado Libre</span>
+          <span class="profile-dims">↑9 →193 ↓11 ←9 mm</span>
+        </label>
+      </div>
+
+      <div class="profile-card" data-profile="andreani">
+        <input type="radio" name="profile" id="p_and" value="andreani" />
+        <label for="p_and">
+          <span class="profile-name">Andreani</span>
+          <span class="profile-dims">↑4 →106 ↓150 ←4 mm</span>
+        </label>
+      </div>
+
+      <div class="profile-card" data-profile="correo_argentino">
+        <input type="radio" name="profile" id="p_ca"  value="correo_argentino" />
+        <label for="p_ca">
+          <span class="profile-name">Correo Argentino</span>
+          <span class="profile-dims">↑18 →188 ↓23 ←17 mm</span>
+        </label>
+      </div>
+
+    </div>
+
+    <!-- ── Error ───────────────────────────────────────── -->
+    <div class="error-box" id="errorBox" hidden></div>
+
+    <!-- ── Botón procesar ─────────────────────────────── -->
+    <button class="btn-process" id="processBtn" type="button" disabled>
+      Procesar y descargar PDF
+    </button>
+
+  </div>
+
+  <!-- Overlay de procesamiento -->
+  <div class="overlay" id="overlay" aria-hidden="true">
+    <div class="overlay-box">
+      <div class="spinner" aria-hidden="true"></div>
+      <p class="overlay-title">Procesando etiquetas…</p>
+      <p class="overlay-hint">Esto puede tomar unos momentos</p>
+    </div>
+  </div>
+
+</ToolLayout>
+
+<style>
+  .tool-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    max-width: 44rem;
+  }
+
+  /* ── Drop zone ────────────────────────────────────── */
+  .drop-zone {
+    position: relative;
+    border: 2px dashed var(--color-gray-200);
+    border-radius: var(--radius-lg);
+    padding: var(--space-8) var(--space-6);
+    text-align: center;
+    cursor: pointer;
+    background: var(--color-white);
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .drop-zone:hover,
+  .drop-zone.drag-over {
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
+  }
+
+  .drop-zone.has-files {
+    border-color: #166534;
+    background: #f0fdf4;
+  }
+
+  .drop-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+
+  .drop-icon  { font-size: 2rem; display: block; margin-bottom: var(--space-2); }
+
+  .drop-text  {
+    font-size: var(--font-base);
+    color: var(--color-gray-700);
+    margin-bottom: var(--space-1);
+  }
+
+  .drop-link  { color: var(--color-primary); font-weight: 600; }
+
+  .drop-hint  {
+    font-size: var(--font-xs);
+    color: var(--color-gray-500);
+    margin-bottom: 0;
+  }
+
+  /* ── Lista de archivos ─────────────────────────────── */
+  .file-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .file-item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-white);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-md);
+  }
+
+  .file-item-name {
+    flex: 1;
+    font-size: var(--font-sm);
+    color: var(--color-gray-900);
+    word-break: break-all;
+    margin-bottom: 0;
+  }
+
+  .file-item-size {
+    font-size: var(--font-xs);
+    color: var(--color-gray-500);
+    flex-shrink: 0;
+  }
+
+  .file-item-remove {
+    background: none;
+    border: none;
+    color: var(--color-gray-500);
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+    font-family: inherit;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .file-item-remove:hover {
+    color: var(--color-accent);
+    background: #fdecea;
+  }
+
+  /* ── Perfiles de corte ─────────────────────────────── */
+  .profiles {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-3);
+  }
+
+  @media (max-width: 560px) {
+    .profiles { grid-template-columns: 1fr; }
+  }
+
+  .profile-card {
+    position: relative;
+    border: 2px solid var(--color-gray-200);
+    border-radius: var(--radius-lg);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  }
+
+  .profile-card:hover {
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
+  }
+
+  .profile-card.selected {
+    border-color: var(--color-primary);
+    background: var(--color-primary-light);
+    box-shadow: 0 2px 12px rgba(26,26,46,0.12);
+  }
+
+  /* Radio input oculto pero funcional */
+  .profile-card input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .profile-card label {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    padding: var(--space-4);
+    cursor: pointer;
+    margin-bottom: 0;
+    font-weight: 400;
+  }
+
+  .profile-name {
+    font-size: var(--font-base);
+    font-weight: 600;
+    color: var(--color-gray-900);
+  }
+
+  .profile-dims {
+    font-size: var(--font-xs);
+    color: var(--color-gray-500);
+    font-family: monospace;
+  }
+
+  /* ── Error box ─────────────────────────────────────── */
+  .error-box {
+    padding: var(--space-3) var(--space-4);
+    background: #fdecea;
+    border: 1px solid #f5c6cb;
+    border-radius: var(--radius-md);
+    font-size: var(--font-sm);
+    color: #991b1b;
+    line-height: 1.6;
+  }
+
+  /* ── Botón ─────────────────────────────────────────── */
+  .btn-process {
+    padding: var(--space-3) var(--space-6);
+    background: var(--color-accent);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--font-base);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    align-self: flex-start;
+  }
+
+  .btn-process:hover:not(:disabled)  { background: #c0303b; }
+  .btn-process:active:not(:disabled) { transform: scale(0.98); }
+  .btn-process:disabled {
+    background: var(--color-gray-200);
+    color: var(--color-gray-500);
+    cursor: not-allowed;
+  }
+
+  /* ── Overlay ───────────────────────────────────────── */
+  .overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .overlay.active { display: flex; }
+
+  .overlay-box {
+    background: var(--color-white);
+    border-radius: var(--radius-lg);
+    padding: var(--space-8);
+    text-align: center;
+    max-width: 320px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+
+  .spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid var(--color-gray-200);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    margin: 0 auto var(--space-4);
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .overlay-title {
+    font-size: var(--font-base);
+    font-weight: 600;
+    color: var(--color-gray-900);
+    margin-bottom: var(--space-1);
+  }
+
+  .overlay-hint {
+    font-size: var(--font-sm);
+    color: var(--color-gray-500);
+    margin-bottom: 0;
+  }
+</style>
+
+<script>
+(function () {
+  const API_URL    = '/api/recortar-etiquetas';
+  const MAX_SIZE   = 10 * 1024 * 1024; // 10 MB
+
+  // ── DOM ─────────────────────────────────────────────
+  const dropZone   = document.getElementById('dropZone')   as HTMLDivElement;
+  const fileInput  = document.getElementById('fileInput')  as HTMLInputElement;
+  const fileList   = document.getElementById('fileList')   as HTMLDivElement;
+  const processBtn = document.getElementById('processBtn') as HTMLButtonElement;
+  const errorBox   = document.getElementById('errorBox')   as HTMLDivElement;
+  const overlay    = document.getElementById('overlay')    as HTMLDivElement;
+
+  let files: File[] = [];
+  let selectedProfile = '';
+
+  // ── Errores ──────────────────────────────────────────
+  function showError(msg: string) {
+    errorBox.textContent = msg;
+    errorBox.hidden = false;
+    setTimeout(() => { errorBox.hidden = true; }, 6000);
+  }
+
+  // ── Archivos ─────────────────────────────────────────
+  function addFiles(incoming: FileList | File[]) {
+    errorBox.hidden = true;
+    const existing = new Set(files.map(f => f.name));
+    for (const f of Array.from(incoming)) {
+      if (f.type !== 'application/pdf') { showError(`Solo PDF: ${f.name}`); continue; }
+      if (f.size > MAX_SIZE)            { showError(`${f.name} supera 10 MB`); continue; }
+      if (existing.has(f.name))         { continue; }
+      files.push(f);
+    }
+    renderFiles();
+    updateBtn();
+  }
+
+  function removeFile(i: number) {
+    files.splice(i, 1);
+    renderFiles();
+    updateBtn();
+  }
+
+  function renderFiles() {
+    fileList.innerHTML = '';
+    dropZone.classList.toggle('has-files', files.length > 0);
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const item = document.createElement('div');
+      item.className = 'file-item';
+
+      const name = document.createElement('p');
+      name.className = 'file-item-name';
+      name.textContent = f.name;
+
+      const size = document.createElement('span');
+      size.className = 'file-item-size';
+      size.textContent = (f.size / 1024).toFixed(1) + ' KB';
+
+      const btn = document.createElement('button');
+      btn.className   = 'file-item-remove';
+      btn.type        = 'button';
+      btn.textContent = '×';
+      btn.setAttribute('aria-label', `Quitar ${f.name}`);
+      btn.addEventListener('click', () => removeFile(i));
+
+      item.appendChild(name);
+      item.appendChild(size);
+      item.appendChild(btn);
+      fileList.appendChild(item);
+    }
+  }
+
+  // ── Drag & drop ──────────────────────────────────────
+  fileInput.addEventListener('change', () => { addFiles(fileInput.files!); fileInput.value = ''; });
+
+  dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('drag-over'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    if (e.dataTransfer?.files) addFiles(e.dataTransfer.files);
+  });
+
+  // Pegar desde portapapeles
+  document.addEventListener('paste', e => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const pasted: File[] = [];
+    for (const item of Array.from(items)) {
+      if (item.kind === 'file') { const f = item.getAsFile(); if (f) pasted.push(f); }
+    }
+    if (pasted.length) addFiles(pasted);
+  });
+
+  // ── Perfiles ─────────────────────────────────────────
+  document.querySelectorAll<HTMLDivElement>('.profile-card').forEach(card => {
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.profile-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      const radio = card.querySelector<HTMLInputElement>('input[type="radio"]')!;
+      radio.checked = true;
+      selectedProfile = radio.value;
+      updateBtn();
+    });
+  });
+
+  // ── Botón ────────────────────────────────────────────
+  function updateBtn() {
+    processBtn.disabled = files.length === 0 || !selectedProfile;
+  }
+
+  // ── Procesar ─────────────────────────────────────────
+  processBtn.addEventListener('click', async () => {
+    if (files.length === 0 || !selectedProfile) return;
+
+    overlay.classList.add('active');
+    processBtn.disabled = true;
+
+    const fd = new FormData();
+    fd.append('profile', selectedProfile);
+    for (const f of files) fd.append('pdfs[]', f, f.name);
+
+    try {
+      const res  = await fetch(API_URL, { method: 'POST', body: fd });
+      const data = await res.json();
+
+      if (data.error) {
+        showError(data.error);
+        return;
+      }
+
+      if (data.errors?.length) {
+        showError(`Advertencia: ${data.errors.join(' | ')}`);
+      }
+
+      // Decodificar base64 → Blob → descarga directa
+      const bin   = atob(data.pdf);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const blob  = new Blob([bytes], { type: 'application/pdf' });
+      const url   = URL.createObjectURL(blob);
+
+      const a      = document.createElement('a');
+      a.href       = url;
+      a.download   = `etiquetas_recortadas_${Date.now()}.pdf`;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Resetear
+      files = [];
+      selectedProfile = '';
+      renderFiles();
+      document.querySelectorAll('.profile-card').forEach(c => c.classList.remove('selected'));
+      document.querySelectorAll<HTMLInputElement>('input[name="profile"]').forEach(r => r.checked = false);
+      updateBtn();
+
+    } catch (e: any) {
+      showError(`Error al procesar: ${e.message}`);
+    } finally {
+      overlay.classList.remove('active');
+      processBtn.disabled = files.length === 0 || !selectedProfile;
+    }
+  });
+})();
+</script>
