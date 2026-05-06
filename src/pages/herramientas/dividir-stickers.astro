@@ -5,8 +5,10 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
 <ToolLayout
   title="Dividir stickers"
-  description="Cargá una imagen con múltiples stickers, dibujá los recortes y exportá cada uno como PNG individual en un ZIP."
+  description="Cargá una imagen, dibujá recortes y exportá cada sticker como PNG."
   icon="🪄"
+  mode="upload"
+  actionLabel="Herramientas"
   tags={[
     { label: 'imagen', type: 'img' },
     { label: 'client-side', type: 'web' },
@@ -18,21 +20,21 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   <script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 
-  <!-- ── UPLOAD MODE ─────────────────────────────────── -->
-  <div class="upload-panel" id="uploadPanel">
+  <!-- Upload slot -->
+  <div slot="upload" class="ds-upload">
     <div class="drop-zone" id="uploadZone">
       <input type="file" id="fileInput" accept="image/*" />
       <span class="drop-icon" aria-hidden="true">⬆</span>
-      <p class="drop-text">Arrastrá tu imagen aquí o <span class="drop-link">hacé clic para seleccionar</span></p>
-      <p class="drop-hint">JPG, PNG, WebP · recomendado máx. 8K</p>
+      <p class="drop-text">Arrastrá tu imagen aquí o <span class="drop-link">hacé clic</span></p>
+      <p class="drop-hint">JPG, PNG, WebP · máx. 8K recomendado</p>
     </div>
   </div>
 
-  <!-- ── EDITOR MODE (oculto hasta cargar imagen) ─────── -->
-  <div class="editor" id="editor" hidden>
+  <!-- Área principal: editor (activo tras toolReady) -->
+  <div class="ds-editor" id="dsEditor">
 
     <!-- Barra superior -->
-    <div class="editor-bar">
+    <div class="ds-bar">
 
       <!-- Info de imagen -->
       <div class="img-info">
@@ -57,15 +59,15 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     </div>
 
     <!-- Cuerpo del editor: canvas + sidebar -->
-    <div class="editor-body">
+    <div class="ds-body">
 
       <!-- Canvas -->
-      <div class="canvas-wrap" id="canvasWrap">
+      <div class="ds-canvas-wrap" id="canvasWrap">
         <canvas id="c"></canvas>
       </div>
 
       <!-- Sidebar -->
-      <aside class="sidebar">
+      <aside class="ds-side">
 
         <!-- Zoom -->
         <div class="side-card">
@@ -123,382 +125,91 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 </ToolLayout>
 
 <style>
-  /* ── Upload panel ───────────────────────────────── */
-  .upload-panel { max-width: 600px; }
+  /* ── Upload ─────────────────────────────────────── */
+  .ds-upload { width: 100%; max-width: 440px; margin: 0 auto; }
 
   .drop-zone {
-    position: relative;
-    border: 2px dashed var(--color-gray-200);
-    border-radius: var(--radius-lg);
-    padding: var(--space-8) var(--space-6);
-    text-align: center;
-    cursor: pointer;
-    background: var(--color-white);
-    transition: border-color 0.2s, background 0.2s, transform 0.15s;
+    position: relative; border: 2px dashed var(--color-gray-200); border-radius: var(--radius-lg);
+    padding: var(--space-8) var(--space-6); text-align: center; cursor: pointer;
+    background: var(--color-white); transition: border-color 0.2s, background 0.2s, transform 0.15s;
   }
 
-  .drop-zone:hover,
-  .drop-zone.dragover {
-    border-color: var(--color-primary);
-    background: var(--color-primary-light);
-    transform: translateY(-2px);
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--color-primary); background: var(--color-primary-light); transform: translateY(-2px);
   }
 
-  .drop-zone input[type="file"] {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    cursor: pointer;
-    width: 100%;
-    height: 100%;
-  }
-
+  .drop-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
   .drop-icon { font-size: 2.5rem; display: block; margin-bottom: var(--space-3); }
+  .drop-text { font-size: var(--font-base); color: var(--color-gray-700); margin-bottom: var(--space-1); font-weight: 500; }
+  .drop-link { color: var(--color-primary); font-weight: 600; }
+  .drop-hint { font-size: var(--font-xs); color: var(--color-gray-500); margin-bottom: 0; }
 
-  .drop-text {
-    font-size: var(--font-base);
-    color: var(--color-gray-700);
-    margin-bottom: var(--space-1);
-    font-weight: 500;
+  /* ── Editor: full height within tl-main ─────────── */
+  .ds-editor { height: 100%; display: flex; flex-direction: column; gap: 0; }
+
+  /* ── Top bar ─────────────────────────────────────── */
+  .ds-bar {
+    display: flex; align-items: center; gap: var(--space-2);
+    padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-gray-200);
+    background: var(--color-gray-50); flex-shrink: 0; flex-wrap: wrap;
   }
 
-  .drop-link  { color: var(--color-primary); font-weight: 600; }
+  .img-info { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+  .info-item { display: flex; align-items: center; gap: var(--space-1); }
+  .info-label { font-size: var(--font-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-gray-500); }
+  .info-value { font-size: var(--font-xs); color: var(--color-gray-900); font-weight: 500; }
 
-  .drop-hint {
-    font-size: var(--font-xs);
-    color: var(--color-gray-500);
-    margin-bottom: 0;
-  }
+  .mode-btns { display: flex; gap: 2px; background: var(--color-gray-200); border-radius: var(--radius-md); padding: 2px; }
+  .btn-mode { font-size: var(--font-xs); font-weight: 500; padding: var(--space-1) var(--space-3); border: none; border-radius: calc(var(--radius-md) - 2px); background: transparent; color: var(--color-gray-700); cursor: pointer; font-family: inherit; transition: background 0.15s, color 0.15s; white-space: nowrap; }
+  .btn-mode--active { background: var(--color-white); color: var(--color-primary); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 
-  /* ── Editor layout ───────────────────────────────── */
-  .editor {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    background: var(--color-white);
-    /* Ocupa el espacio disponible de la ventana */
-    height: calc(100vh - 200px);
-    min-height: 560px;
-  }
+  .quick-actions { display: flex; gap: var(--space-2); margin-left: auto; flex-wrap: wrap; }
+  .btn-action { font-size: var(--font-xs); font-weight: 500; padding: var(--space-1) var(--space-3); background: var(--color-white); color: var(--color-gray-700); border: 1px solid var(--color-gray-200); border-radius: var(--radius-md); cursor: pointer; font-family: inherit; white-space: nowrap; transition: border-color 0.15s, color 0.15s; }
+  .btn-action:hover { border-color: var(--color-primary); color: var(--color-primary); }
 
-  /* ── Barra superior ──────────────────────────────── */
-  .editor-bar {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-2) var(--space-4);
-    border-bottom: 1px solid var(--color-gray-200);
-    background: var(--color-gray-50);
-    flex-shrink: 0;
-    flex-wrap: wrap;
-    row-gap: var(--space-2);
-  }
+  /* ── Body: canvas + sidebar ──────────────────────── */
+  .ds-body { flex: 1; display: grid; grid-template-columns: 1fr 200px; overflow: hidden; }
 
-  .img-info {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-    flex-wrap: wrap;
-  }
+  @media (max-width: 640px) { .ds-body { grid-template-columns: 1fr; } }
 
-  .info-item {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-  }
+  .ds-canvas-wrap { overflow: auto; background: var(--color-gray-100); display: flex; align-items: flex-start; justify-content: center; padding: var(--space-4); }
+  .ds-canvas-wrap canvas { display: block; box-shadow: 0 2px 16px rgba(0,0,0,0.12); }
 
-  .info-label {
-    font-size: var(--font-xs);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--color-gray-500);
-  }
+  /* ── Side panel ──────────────────────────────────── */
+  .ds-side { border-left: 1px solid var(--color-gray-200); display: flex; flex-direction: column; overflow-y: auto; background: var(--color-white); }
 
-  .info-value {
-    font-size: var(--font-xs);
-    color: var(--color-gray-900);
-    font-weight: 500;
-  }
+  .side-card { padding: var(--space-3); border-bottom: 1px solid var(--color-gray-200); }
+  .side-title { font-size: var(--font-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-gray-500); margin-bottom: var(--space-2); }
 
-  /* Modo dibujar/seleccionar */
-  .mode-btns {
-    display: flex;
-    gap: 2px;
-    background: var(--color-gray-200);
-    border-radius: var(--radius-md);
-    padding: 2px;
-  }
-
-  .btn-mode {
-    font-size: var(--font-xs);
-    font-weight: 500;
-    padding: var(--space-1) var(--space-3);
-    border: none;
-    border-radius: calc(var(--radius-md) - 2px);
-    background: transparent;
-    color: var(--color-gray-700);
-    cursor: pointer;
-    font-family: inherit;
-    transition: background 0.15s, color 0.15s;
-    white-space: nowrap;
-  }
-
-  .btn-mode--active {
-    background: var(--color-white);
-    color: var(--color-primary);
-    font-weight: 600;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  }
-
-  /* Acciones rápidas */
-  .quick-actions {
-    display: flex;
-    gap: var(--space-2);
-    margin-left: auto;
-    flex-wrap: wrap;
-  }
-
-  .btn-action {
-    font-size: var(--font-xs);
-    font-weight: 500;
-    padding: var(--space-1) var(--space-3);
-    background: var(--color-white);
-    color: var(--color-gray-700);
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    font-family: inherit;
-    white-space: nowrap;
-    transition: border-color 0.15s, color 0.15s, background 0.15s;
-  }
-
-  .btn-action:hover        { border-color: var(--color-primary); color: var(--color-primary); }
-  .btn-action--new:hover   { border-color: var(--color-gray-700); color: var(--color-gray-700); }
-
-  /* ── Editor body ─────────────────────────────────── */
-  .editor-body {
-    display: grid;
-    grid-template-columns: 1fr 220px;
-    flex: 1;
-    overflow: hidden;
-  }
-
-  @media (max-width: 768px) {
-    .editor-body { grid-template-columns: 1fr; }
-    .sidebar { flex-direction: row; flex-wrap: wrap; max-height: 180px; overflow-y: auto; }
-  }
-
-  /* ── Canvas area ─────────────────────────────────── */
-  .canvas-wrap {
-    overflow: auto;
-    background: var(--color-gray-100);
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: var(--space-4);
-  }
-
-  .canvas-wrap canvas {
-    display: block;
-    box-shadow: 0 2px 16px rgba(0,0,0,0.12);
-  }
-
-  /* ── Sidebar ─────────────────────────────────────── */
-  .sidebar {
-    border-left: 1px solid var(--color-gray-200);
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-    overflow-y: auto;
-    background: var(--color-white);
-  }
-
-  .side-card {
-    padding: var(--space-4);
-    border-bottom: 1px solid var(--color-gray-200);
-  }
-
-  .side-title {
-    font-size: var(--font-xs);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--color-gray-500);
-    margin-bottom: var(--space-3);
-  }
-
-  /* ── Zoom ───────────────────────────────────────── */
-  .zoom-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    margin-bottom: var(--space-2);
-  }
-
-  .btn-zoom {
-    width: 28px;
-    height: 28px;
-    padding: 0;
-    background: var(--color-gray-100);
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-md);
-    font-size: var(--font-base);
-    font-weight: 700;
-    color: var(--color-gray-700);
-    cursor: pointer;
-    font-family: inherit;
-    line-height: 1;
-    flex-shrink: 0;
-    transition: background 0.15s;
-  }
-
+  .zoom-row { display: flex; align-items: center; gap: var(--space-1); margin-bottom: var(--space-2); }
+  .btn-zoom { width: 28px; height: 28px; padding: 0; background: var(--color-gray-100); border: 1px solid var(--color-gray-200); border-radius: var(--radius-md); font-size: var(--font-base); font-weight: 700; color: var(--color-gray-700); cursor: pointer; font-family: inherit; line-height: 1; flex-shrink: 0; transition: background 0.15s; }
   .btn-zoom:hover { background: var(--color-gray-200); }
 
-  .zoom-slider {
-    flex: 1;
-    height: 6px;
-    accent-color: var(--color-primary);
-    cursor: pointer;
-    background: none;
-    border: none;
-    padding: 0;
-    box-shadow: none;
-    width: auto;
-  }
-
+  .zoom-slider { flex: 1; height: 6px; accent-color: var(--color-primary); cursor: pointer; background: none; border: none; padding: 0; box-shadow: none; width: auto; }
   .zoom-slider:focus { box-shadow: none; outline: none; }
 
-  .zoom-display {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .zoom-value {
-    font-size: var(--font-sm);
-    font-weight: 700;
-    color: var(--color-primary);
-  }
-
-  .btn-zoom-reset {
-    font-size: var(--font-xs);
-    padding: 2px var(--space-2);
-    background: none;
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-sm);
-    color: var(--color-gray-500);
-    cursor: pointer;
-    font-family: inherit;
-    transition: background 0.15s;
-  }
-
+  .zoom-display { display: flex; align-items: center; justify-content: space-between; }
+  .zoom-value { font-size: var(--font-sm); font-weight: 700; color: var(--color-primary); }
+  .btn-zoom-reset { font-size: var(--font-xs); padding: 2px var(--space-2); background: none; border: 1px solid var(--color-gray-200); border-radius: var(--radius-sm); color: var(--color-gray-500); cursor: pointer; font-family: inherit; }
   .btn-zoom-reset:hover { background: var(--color-gray-100); color: var(--color-gray-900); }
 
-  /* ── Stats ───────────────────────────────────────── */
-  .stats-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-2);
-  }
-
-  .stat-card {
-    background: var(--color-gray-50);
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-md);
-    padding: var(--space-2) var(--space-3);
-    text-align: center;
-  }
-
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-1); }
+  .stat-card { background: var(--color-gray-50); border: 1px solid var(--color-gray-200); border-radius: var(--radius-md); padding: var(--space-2); text-align: center; }
   .stat-card--full { grid-column: 1 / -1; }
+  .stat-label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--color-gray-500); font-weight: 600; margin-bottom: 2px; }
+  .stat-value { font-size: var(--font-lg); font-weight: 700; color: var(--color-primary); line-height: 1.2; }
+  .stat-value--sm { font-size: var(--font-xs); }
 
-  .stat-label {
-    font-size: 0.6rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--color-gray-500);
-    font-weight: 600;
-    margin-bottom: 2px;
-  }
-
-  .stat-value {
-    font-size: var(--font-xl);
-    font-weight: 700;
-    color: var(--color-primary);
-    line-height: 1.2;
-  }
-
-  .stat-value--sm { font-size: var(--font-base); }
-
-  /* ── Progress ────────────────────────────────────── */
-  .progress-card {
-    display: none;
-    padding: var(--space-3) var(--space-4);
-    border-bottom: 1px solid var(--color-gray-200);
-    background: var(--color-primary-light);
-  }
-
+  .progress-card { display: none; padding: var(--space-3); border-bottom: 1px solid var(--color-gray-200); background: var(--color-primary-light); }
   .progress-card.active { display: block; }
+  .progress-label { font-size: var(--font-xs); font-weight: 500; color: var(--color-gray-700); margin-bottom: var(--space-2); }
+  .progress-track { position: relative; height: 20px; background: var(--color-gray-200); border-radius: var(--radius-sm); overflow: hidden; }
+  .progress-fill { height: 100%; width: 0%; background: var(--color-primary); transition: width 0.3s; }
+  .progress-text { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: var(--font-xs); font-weight: 600; color: var(--color-gray-900); }
 
-  .progress-label {
-    font-size: var(--font-xs);
-    font-weight: 500;
-    color: var(--color-gray-700);
-    margin-bottom: var(--space-2);
-  }
-
-  .progress-track {
-    position: relative;
-    height: 20px;
-    background: var(--color-gray-200);
-    border-radius: var(--radius-sm);
-    overflow: hidden;
-  }
-
-  .progress-fill {
-    height: 100%;
-    width: 0%;
-    background: var(--color-primary);
-    transition: width 0.3s;
-  }
-
-  .progress-text {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: var(--font-xs);
-    font-weight: 600;
-    color: var(--color-gray-900);
-  }
-
-  /* ── Export button ───────────────────────────────── */
-  .btn-export {
-    width: 100%;
-    padding: var(--space-3);
-    background: var(--color-accent);
-    color: #fff;
-    border: none;
-    border-radius: var(--radius-md);
-    font-size: var(--font-sm);
-    font-weight: 600;
-    font-family: inherit;
-    cursor: pointer;
-    transition: background 0.2s, transform 0.1s;
-  }
-
-  .btn-export:hover:not(:disabled)  { background: #c0303b; }
-  .btn-export:active:not(:disabled) { transform: scale(0.98); }
-
-  .btn-export:disabled {
-    background: var(--color-gray-200);
-    color: var(--color-gray-500);
-    cursor: not-allowed;
-  }
+  .btn-export { width: 100%; padding: var(--space-3); background: var(--color-accent); color: #fff; border: none; border-radius: var(--radius-md); font-size: var(--font-sm); font-weight: 600; font-family: inherit; cursor: pointer; transition: background 0.2s; }
+  .btn-export:hover:not(:disabled) { background: #c0303b; }
+  .btn-export:disabled { background: var(--color-gray-200); color: var(--color-gray-500); cursor: not-allowed; }
 </style>
 
 <script>
@@ -646,10 +357,11 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
       // Mostrar editor, ocultar upload
       uploadPanel.hidden = true;
-      editorEl.hidden    = false;
+      // toolReady is called in loadImageToCanvas after setup
 
       setupCanvasEvents();
       activateDrawMode();
+      (window as any).toolReady();
 
       zoomSlider.value          = '100';
       zoomValue.textContent     = '100%';
@@ -908,8 +620,8 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
     if (fabricCanvas) fabricCanvas.dispose();
 
-    editorEl.hidden    = true;
-    uploadPanel.hidden = false;
+    (window as any).toolReset();
+    // Re-show the upload state managed by ToolLayout
 
     fileInput.value             = '';
     imageName.textContent       = '—';

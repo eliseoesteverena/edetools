@@ -1,23 +1,39 @@
 ---
 // src/layouts/ToolLayout.astro
-// Layout para páginas de herramientas individuales.
-// Extiende BaseLayout agregando:
-//   - breadcrumb automático
-//   - header de herramienta (título, descripción, tags)
-//   - área de contenido con sidebar opcional
+//
+// Layout para herramientas individuales.
+// Dos modos según el tipo de herramienta:
+//
+//   mode="upload"  (default)
+//     Estado inicial: pantalla limpia con drop zone centrada.
+//     Estado activo:  área principal + sidebar de controles.
+//     El JS de cada herramienta llama a toolReady() para
+//     activar el layout completo.
+//
+//   mode="form"
+//     Sin drop zone. Sidebar visible desde el inicio con los
+//     controles, área principal para preview/output.
+//     Para: WhatsApp Imprimible, Carta Documento, Abrir Links.
+//
+// Slots:
+//   default       → contenido del área principal
+//   sidebar       → controles y ajustes
+//   upload        → override de la drop zone (opcional)
+//
+// Función global expuesta: window.toolReady(label?)
+//   Llama desde el script de la herramienta cuando hay
+//   contenido para mostrar. Activa el layout completo.
 
 import BaseLayout from './BaseLayout.astro';
-
-interface Tag {
-  label: string;
-  type: string;
-}
 
 interface Props {
   title: string;
   description?: string;
   icon?: string;
-  tags?: Tag[];
+  tags?: { label: string; type: string }[];
+  mode?: 'upload' | 'form';
+  // Texto del botón de acción principal en el header mobile
+  actionLabel?: string;
 }
 
 const {
@@ -25,109 +41,461 @@ const {
   description = '',
   icon = '🔧',
   tags = [],
+  mode = 'upload',
+  actionLabel = 'Ajustes',
 } = Astro.props;
 ---
 
-<BaseLayout title={title} description={description} toolPage={true}>
+<BaseLayout
+  title={title}
+  description={description}
+  toolPage={true}
+  toolTitle={title}
+>
 
-  <!-- Slot para breadcrumb en BaseLayout -->
-  <Fragment slot="breadcrumb">{title}</Fragment>
+  <div class="tl-shell" data-mode={mode} id="tlShell">
 
-  <!-- Hero de la herramienta -->
-  <div class="tool-hero">
-    <div class="container">
-      <div class="tool-hero-inner">
-        <span class="tool-hero-icon" aria-hidden="true">{icon}</span>
-        <div>
-          <h1 class="tool-hero-title">{title}</h1>
-          {description && <p class="tool-hero-desc">{description}</p>}
+    <!-- ══════════════════════════════════════════════
+         UPLOAD MODE — pantalla limpia inicial
+         Solo visible en mode="upload" y antes de toolReady()
+    ══════════════════════════════════════════════ -->
+    {mode === 'upload' && (
+      <div class="tl-upload" id="tlUpload">
+        <div class="tl-upload-inner">
+          <span class="tl-upload-icon" aria-hidden="true">{icon}</span>
+          <h1 class="tl-upload-title">{title}</h1>
+          {description && <p class="tl-upload-desc">{description}</p>}
+          <!-- La herramienta inyecta aquí su drop zone via slot "upload"
+               o bien usa el área completa como zona de drop -->
+          <div class="tl-upload-slot">
+            <slot name="upload" />
+          </div>
+        </div>
+      </div>
+    )}
+
+    <!-- ══════════════════════════════════════════════
+         WORKING LAYOUT — área principal + sidebar
+         En mode="upload": oculto hasta toolReady()
+         En mode="form":   visible siempre
+    ══════════════════════════════════════════════ -->
+    <div class="tl-working" id="tlWorking">
+
+      <!-- Barra superior: título + botón engranaje (mobile) -->
+      <div class="tl-topbar">
+        <div class="tl-topbar-left">
+          <span class="tl-topbar-icon" aria-hidden="true">{icon}</span>
+          <h1 class="tl-topbar-title">{title}</h1>
           {tags.length > 0 && (
-            <ul class="tool-hero-tags" aria-label="Categorías">
+            <ul class="tl-tags" aria-label="Categorías">
               {tags.map(t => (
-                <li class:list={['tag', `tag--${t.type}`]}>{t.label}</li>
+                <li class:list={['tl-tag', `tl-tag--${t.type}`]}>{t.label}</li>
               ))}
             </ul>
           )}
         </div>
-      </div>
-    </div>
-  </div>
 
-  <!-- Contenido de la página -->
-  <div class="tool-body">
-    <div class="container">
-      <slot />
+        <!-- Botón engranaje — mobile only, abre el sidebar como drawer -->
+        <button
+          class="btn-gear"
+          id="btnGear"
+          type="button"
+          aria-label={`Abrir ${actionLabel}`}
+          aria-expanded="false"
+          aria-controls="tlSidebar"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <span class="btn-gear-label">{actionLabel}</span>
+        </button>
+      </div>
+
+      <!-- Body: main + sidebar -->
+      <div class="tl-body">
+
+        <!-- Área principal -->
+        <div class="tl-main" id="tlMain">
+          <slot />
+        </div>
+
+        <!-- Sidebar overlay (mobile) -->
+        <div class="tl-sidebar-overlay" id="tlSidebarOverlay" aria-hidden="true"></div>
+
+        <!-- Sidebar -->
+        <aside class="tl-sidebar" id="tlSidebar" aria-label="Controles">
+          <div class="tl-sidebar-header">
+            <span class="tl-sidebar-title">{actionLabel}</span>
+            <button class="btn-sidebar-close" id="btnSidebarClose" type="button" aria-label="Cerrar">
+              &times;
+            </button>
+          </div>
+          <div class="tl-sidebar-body">
+            <slot name="sidebar" />
+          </div>
+        </aside>
+
+      </div>
     </div>
   </div>
 
 </BaseLayout>
 
 <style>
-  /* ── Hero ─────────────────────────────────────────── */
-  .tool-hero {
-    background: var(--color-primary);
-    padding: var(--space-6) 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
-  .tool-hero-inner {
+  /* ── Shell ─────────────────────────────────────────── */
+  .tl-shell {
     display: flex;
-    align-items: flex-start;
-    gap: var(--space-4);
+    flex-direction: column;
+    height: calc(100vh - 52px); /* 52px = altura del site-header */
+    overflow: hidden;
   }
 
-  .tool-hero-icon {
-    font-size: 2rem;
+  /* ── UPLOAD SCREEN ──────────────────────────────────── */
+  .tl-upload {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-8) var(--space-4);
+    background: var(--color-gray-50);
+  }
+
+  .tl-upload-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    max-width: 480px;
+    width: 100%;
+    gap: var(--space-3);
+  }
+
+  .tl-upload-icon {
+    font-size: 3rem;
     line-height: 1;
-    margin-top: 0.2rem;
-    flex-shrink: 0;
+    opacity: 0.6;
   }
 
-  .tool-hero-title {
+  .tl-upload-title {
     font-size: var(--font-2xl);
     font-weight: 700;
-    color: #ffffff;
-    margin-bottom: var(--space-1);
+    color: var(--color-gray-900);
+    margin-bottom: 0;
     letter-spacing: -0.02em;
   }
 
-  .tool-hero-desc {
-    color: var(--color-gray-500);
+  .tl-upload-desc {
     font-size: var(--font-sm);
-    max-width: 42rem;
-    margin-bottom: var(--space-2);
+    color: var(--color-gray-500);
+    max-width: 360px;
+    line-height: 1.6;
+    margin-bottom: 0;
   }
 
-  .tool-hero-tags {
+  .tl-upload-slot { width: 100%; }
+
+  /* ── WORKING LAYOUT ─────────────────────────────────── */
+  .tl-working {
+    flex: 1;
     display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    /* En mode=upload: oculto hasta toolReady() */
+  }
+
+  [data-mode="upload"] .tl-working { display: none; }
+  [data-mode="upload"].ready .tl-upload  { display: none; }
+  [data-mode="upload"].ready .tl-working { display: flex; }
+
+  [data-mode="form"] .tl-upload   { display: none; }
+  [data-mode="form"] .tl-working  { display: flex; }
+
+  /* ── Topbar ─────────────────────────────────────────── */
+  .tl-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-4);
+    border-bottom: 1px solid var(--color-gray-200);
+    background: var(--color-white);
+    flex-shrink: 0;
+    min-height: 44px;
+  }
+
+  .tl-topbar-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .tl-topbar-icon {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }
+
+  .tl-topbar-title {
+    font-size: var(--font-sm);
+    font-weight: 600;
+    color: var(--color-gray-900);
+    margin-bottom: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* Tags */
+  .tl-tags {
+    display: none;
     flex-wrap: wrap;
-    gap: var(--space-1);
+    gap: 4px;
     list-style: none;
     padding: 0;
     margin: 0;
   }
 
-  /* ── Body ──────────────────────────────────────────── */
-  .tool-body {
-    padding: var(--space-8) 0;
+  @media (min-width: 640px) {
+    .tl-tags { display: flex; }
   }
 
-  /* Tags — mismos estilos que ToolCard */
-  .tag {
+  .tl-tag {
     font-size: 0.6rem;
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    padding: 0.15rem 0.45rem;
+    padding: 1px 6px;
     border-radius: var(--radius-sm);
   }
 
-  .tag--print  { background: #dcfce7; color: #166534; }
-  .tag--pdf    { background: #fdecea; color: #991b1b; }
-  .tag--img    { background: #ede9fe; color: #5b21b6; }
-  .tag--web    { background: #dbeafe; color: #1e40af; }
-  .tag--email  { background: #fef3c7; color: #92400e; }
-  .tag--python { background: #fef9c3; color: #713f12; }
-  .tag--php    { background: #f3e8ff; color: #6b21a8; }
-  .tag--local  { background: rgba(255,255,255,0.08); color: var(--color-gray-500); }
+  .tl-tag--print  { background: #dcfce7; color: #166534; }
+  .tl-tag--pdf    { background: #fdecea; color: #991b1b; }
+  .tl-tag--img    { background: #ede9fe; color: #5b21b6; }
+  .tl-tag--web    { background: #dbeafe; color: #1e40af; }
+  .tl-tag--email  { background: #fef3c7; color: #92400e; }
+  .tl-tag--python { background: #fef9c3; color: #713f12; }
+  .tl-tag--php    { background: #f3e8ff; color: #6b21a8; }
+  .tl-tag--local  { background: var(--color-gray-100); color: var(--color-gray-700); }
+
+  /* Botón engranaje */
+  .btn-gear {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: var(--space-1) var(--space-3);
+    background: var(--color-gray-100);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-md);
+    color: var(--color-gray-700);
+    font-size: var(--font-xs);
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .btn-gear:hover {
+    background: var(--color-gray-200);
+    border-color: var(--color-gray-500);
+  }
+
+  /* En desktop el engranaje se oculta — el sidebar siempre está visible */
+  @media (min-width: 768px) {
+    .btn-gear { display: none; }
+  }
+
+  .btn-gear-label {
+    display: none;
+  }
+
+  @media (min-width: 400px) {
+    .btn-gear-label { display: inline; }
+  }
+
+  /* ── Body: main + sidebar ───────────────────────────── */
+  .tl-body {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr;
+    overflow: hidden;
+    position: relative;
+  }
+
+  @media (min-width: 768px) {
+    .tl-body {
+      grid-template-columns: 1fr 260px;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .tl-body {
+      grid-template-columns: 1fr 300px;
+    }
+  }
+
+  /* ── Área principal ─────────────────────────────────── */
+  .tl-main {
+    overflow: auto;
+    padding: var(--space-4);
+    background: var(--color-gray-50);
+  }
+
+  /* ── Sidebar overlay (mobile) ───────────────────────── */
+  .tl-sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 60;
+  }
+
+  .tl-sidebar-overlay.open { display: block; }
+
+  /* ── Sidebar ────────────────────────────────────────── */
+  .tl-sidebar {
+    background: var(--color-white);
+    border-left: 1px solid var(--color-gray-200);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+
+    /* Mobile: drawer desde la derecha */
+    position: fixed;
+    top: 52px; /* bajo el header */
+    right: 0;
+    bottom: 0;
+    width: min(300px, 85vw);
+    transform: translateX(100%);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 65;
+  }
+
+  .tl-sidebar.open {
+    transform: translateX(0);
+  }
+
+  /* Desktop: sidebar estático en el grid */
+  @media (min-width: 768px) {
+    .tl-sidebar {
+      position: static;
+      transform: none;
+      transition: none;
+      width: auto;
+    }
+
+    .tl-sidebar-overlay { display: none !important; }
+  }
+
+  .tl-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--color-gray-200);
+    background: var(--color-gray-50);
+    flex-shrink: 0;
+
+    /* Solo visible en mobile (en desktop el título lo pone la herramienta) */
+  }
+
+  @media (min-width: 768px) {
+    .tl-sidebar-header { display: none; }
+  }
+
+  .tl-sidebar-title {
+    font-size: var(--font-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--color-gray-500);
+  }
+
+  .btn-sidebar-close {
+    background: none;
+    border: none;
+    font-size: 1.3rem;
+    color: var(--color-gray-500);
+    cursor: pointer;
+    padding: 2px 6px;
+    font-family: inherit;
+    line-height: 1;
+    border-radius: var(--radius-sm);
+  }
+
+  .btn-sidebar-close:hover { color: var(--color-gray-900); background: var(--color-gray-100); }
+
+  .tl-sidebar-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  /* ── @media print ───────────────────────────────────── */
+  @media print {
+    .tl-topbar,
+    .tl-upload,
+    .btn-gear,
+    .tl-sidebar,
+    .tl-sidebar-overlay { display: none !important; }
+
+    .tl-shell,
+    .tl-working,
+    .tl-body { display: block !important; height: auto !important; overflow: visible !important; }
+
+    .tl-main { padding: 0 !important; overflow: visible !important; background: #fff !important; }
+  }
 </style>
+
+<script>
+  // ── Sidebar mobile ──────────────────────────────────────
+  const btnGear          = document.getElementById('btnGear')          as HTMLButtonElement;
+  const btnSidebarClose  = document.getElementById('btnSidebarClose')  as HTMLButtonElement;
+  const tlSidebar        = document.getElementById('tlSidebar')        as HTMLElement;
+  const tlSidebarOverlay = document.getElementById('tlSidebarOverlay') as HTMLDivElement;
+
+  function openSidebar() {
+    tlSidebar.classList.add('open');
+    tlSidebarOverlay.classList.add('open');
+    tlSidebarOverlay.setAttribute('aria-hidden', 'false');
+    btnGear.setAttribute('aria-expanded', 'true');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeSidebar() {
+    tlSidebar.classList.remove('open');
+    tlSidebarOverlay.classList.remove('open');
+    tlSidebarOverlay.setAttribute('aria-hidden', 'true');
+    btnGear.setAttribute('aria-expanded', 'false');
+    document.body.style.overflow = '';
+  }
+
+  btnGear?.addEventListener('click', () =>
+    tlSidebar.classList.contains('open') ? closeSidebar() : openSidebar()
+  );
+  btnSidebarClose?.addEventListener('click', closeSidebar);
+  tlSidebarOverlay?.addEventListener('click', closeSidebar);
+
+  // ── toolReady() — API pública para las herramientas ─────
+  // Llamar desde el script de la herramienta cuando hay
+  // contenido para mostrar (ej: después de cargar un archivo).
+  // Activa el layout working y oculta la pantalla de upload.
+  //
+  // Uso: window.toolReady()
+  (window as any).toolReady = function () {
+    const shell = document.getElementById('tlShell');
+    if (shell) shell.classList.add('ready');
+  };
+
+  // ── toolReset() — volver a upload screen ────────────────
+  (window as any).toolReset = function () {
+    const shell = document.getElementById('tlShell');
+    if (shell) shell.classList.remove('ready');
+    closeSidebar();
+  };
+</script>

@@ -5,8 +5,10 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
 <ToolLayout
   title="Extractor de primera página"
-  description="Cargá múltiples PDFs, seleccioná cuáles procesar y descargá un único PDF con la primera página de cada uno."
+  description="Extraé la primera página de múltiples PDFs en un único archivo."
   icon="📑"
+  mode="upload"
+  actionLabel="Herramientas"
   tags={[
     { label: 'pdf', type: 'pdf' },
     { label: 'worker', type: 'web' },
@@ -472,6 +474,7 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
       added++;
     }
     log('sys', `${added} archivo(s) agregado(s). Total: ${files.length}`);
+    if (added > 0) (window as any).toolReady();
     renderCards(); updateCounters();
     fileInput.value = '';
   });

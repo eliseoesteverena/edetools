@@ -1,24 +1,61 @@
 ---
 // src/layouts/BaseLayout.astro
-// Layout raíz compartido por todas las páginas de edetools.
+// Layout raíz — rediseño inspirado en iLovePDF.
+//
+// Header con dos menús separados:
+//   - Izquierda: hamburguesa → drawer con lista de herramientas por sección
+//   - Derecha:   cuenta/auth (stub Auth0)
+//
 // Props:
 //   title       – <title> de la página
-//   description – meta description (opcional)
-//   toolPage    – boolean: si es true muestra breadcrumb "← Herramientas"
+//   description – meta description
+//   toolPage    – muestra el nombre de la herramienta activa en el header
 
 interface Props {
   title: string;
   description?: string;
   toolPage?: boolean;
+  toolTitle?: string;
 }
 
 const {
   title,
   description = 'Herramientas para gráfica e impresión profesional.',
   toolPage = false,
+  toolTitle = '',
 } = Astro.props;
 
 const currentPath = Astro.url.pathname;
+
+// Lista de herramientas para el drawer de navegación
+const tools = [
+  {
+    section: 'Impresión',
+    items: [
+      { href: '/herramientas/marcas-de-corte',    label: 'Marcas de corte',           icon: '✂️'  },
+      { href: '/herramientas/fotos',              label: 'Fotos',                     icon: '🖼️' },
+      { href: '/herramientas/recorte-etiquetas',  label: 'Recorte de etiquetas',      icon: '📦'  },
+      { href: '/herramientas/whatsapp-imprimible',label: 'WhatsApp Imprimible',        icon: '💬'  },
+      { href: '/herramientas/carta-documento',    label: 'Carta Documento',           icon: '📄'  },
+    ],
+  },
+  {
+    section: 'Archivos PDF',
+    items: [
+      { href: '/herramientas/contar-paginas',          label: 'Contar páginas',              icon: '🔢' },
+      { href: '/herramientas/extractor-primera-pagina',label: 'Extractor de primera página', icon: '📑' },
+      { href: '/herramientas/dividir-stickers',        label: 'Dividir stickers',            icon: '🪄' },
+      { href: '/herramientas/recorte-etiquetas',       label: 'Recorte de etiquetas',        icon: '📦' },
+    ],
+  },
+  {
+    section: 'Email & Web',
+    items: [
+      { href: '/herramientas/eml-extractor', label: 'Extractor de EMLs', icon: '📧' },
+      { href: '/herramientas/abrir-links',   label: 'Abrir links',       icon: '🔗' },
+    ],
+  },
+];
 ---
 
 <!DOCTYPE html>
@@ -28,21 +65,13 @@ const currentPath = Astro.url.pathname;
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content={description} />
   <title>{title} — edetools</title>
-
-  <!-- Framework CSS propio -->
   <link rel="stylesheet" href="/m-2.min.css" />
-
-  <!-- Google Fonts: Roboto (requerido por m-2) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap"
-    rel="stylesheet"
-  />
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-  <!-- Estilos globales del layout -->
   <style>
-    /* ── Layout shell ─────────────────────────────────── */
+    /* ── Shell ─────────────────────────────────────────── */
     body {
       min-height: 100vh;
       display: flex;
@@ -52,52 +81,113 @@ const currentPath = Astro.url.pathname;
 
     main { flex: 1; }
 
-    /* ── HEADER ───────────────────────────────────────── */
+    /* ── HEADER ────────────────────────────────────────── */
     .site-header {
       background: var(--color-primary);
       border-bottom: 3px solid var(--color-accent);
-      padding: var(--space-4) 0;
+      height: 52px;
       position: sticky;
       top: 0;
-      z-index: 50;
+      z-index: 100;
     }
 
     .header-inner {
+      height: 100%;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: var(--space-4);
+      gap: var(--space-2);
     }
 
-    /* Brand */
+    .header-left,
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    /* Botón hamburguesa */
+    .btn-menu {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 5px;
+      width: 36px;
+      height: 36px;
+      padding: 8px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      border-radius: var(--radius-md);
+      flex-shrink: 0;
+      transition: background 0.15s;
+    }
+
+    .btn-menu:hover { background: rgba(255,255,255,0.08); }
+
+    .btn-menu span {
+      display: block;
+      height: 2px;
+      background: #ffffff;
+      border-radius: 2px;
+      transition: transform 0.2s, opacity 0.2s;
+    }
+
+    .btn-menu.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .btn-menu.open span:nth-child(2) { opacity: 0; }
+    .btn-menu.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+    /* Marca */
     .brand {
       display: flex;
       align-items: center;
-      gap: 0.35rem;
+      gap: 0.3rem;
       text-decoration: none;
     }
 
     .brand-name {
-      font-size: var(--font-xl);
+      font-size: var(--font-lg);
       font-weight: 700;
       color: #ffffff;
       letter-spacing: -0.03em;
     }
 
     .brand-dot {
-      width: 6px;
-      height: 6px;
+      width: 5px;
+      height: 5px;
       background: var(--color-accent);
       border-radius: 50%;
       flex-shrink: 0;
       margin-bottom: -2px;
     }
 
-    /* Nav links */
+    /* Nombre de herramienta activa (solo en tool pages) */
+    .tool-name-badge {
+      display: none;
+      font-size: var(--font-xs);
+      color: var(--color-gray-500);
+      padding: 2px var(--space-2);
+      border: 1px solid var(--color-gray-700);
+      border-radius: var(--radius-sm);
+      white-space: nowrap;
+      max-width: 160px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    @media (min-width: 480px) {
+      .tool-name-badge { display: inline-block; }
+    }
+
+    /* Nav links (solo desktop) */
     .header-nav {
-      display: flex;
+      display: none;
       align-items: center;
       gap: var(--space-4);
+    }
+
+    @media (min-width: 768px) {
+      .header-nav { display: flex; }
     }
 
     .nav-link {
@@ -109,17 +199,10 @@ const currentPath = Astro.url.pathname;
       border-bottom: 2px solid transparent;
     }
 
-    .nav-link:hover {
-      color: #ffffff;
-      text-decoration: none;
-    }
+    .nav-link:hover          { color: #ffffff; text-decoration: none; }
+    .nav-link.active         { color: #ffffff; border-bottom-color: var(--color-accent); }
 
-    .nav-link.active {
-      color: #ffffff;
-      border-bottom-color: var(--color-accent);
-    }
-
-    /* Auth button */
+    /* Botón auth */
     .btn-auth {
       font-size: var(--font-sm);
       font-weight: 500;
@@ -131,42 +214,137 @@ const currentPath = Astro.url.pathname;
       cursor: pointer;
       transition: all 0.2s;
       font-family: inherit;
+      white-space: nowrap;
     }
 
-    .btn-auth:hover {
-      border-color: #ffffff;
-      color: #ffffff;
-      background: transparent;
+    .btn-auth:hover { border-color: #ffffff; color: #ffffff; background: transparent; }
+
+    /* ── DRAWER DE HERRAMIENTAS ────────────────────────── */
+    .drawer-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 90;
     }
 
-    /* Breadcrumb en páginas de herramienta */
-    .breadcrumb-bar {
-      background: var(--color-surface, #fff);
+    .drawer-overlay.open { display: block; }
+
+    .drawer {
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: min(320px, 85vw);
+      background: var(--color-white);
+      z-index: 95;
+      transform: translateX(-100%);
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .drawer.open { transform: translateX(0); }
+
+    .drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-4);
       border-bottom: 1px solid var(--color-gray-200);
+      background: var(--color-primary);
+      flex-shrink: 0;
+    }
+
+    .drawer-title {
+      font-size: var(--font-sm);
+      font-weight: 600;
+      color: #ffffff;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .btn-drawer-close {
+      background: none;
+      border: none;
+      color: var(--color-gray-500);
+      font-size: 1.4rem;
+      line-height: 1;
+      cursor: pointer;
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
+      font-family: inherit;
+      transition: color 0.15s;
+    }
+
+    .btn-drawer-close:hover { color: #ffffff; background: none; }
+
+    .drawer-body {
+      flex: 1;
+      overflow-y: auto;
       padding: var(--space-2) 0;
     }
 
-    .breadcrumb {
+    .drawer-section-title {
+      font-size: var(--font-xs);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--color-gray-500);
+      padding: var(--space-3) var(--space-4) var(--space-1);
+    }
+
+    .drawer-link {
       display: flex;
       align-items: center;
+      gap: var(--space-3);
+      padding: var(--space-2) var(--space-4);
+      text-decoration: none;
+      color: var(--color-gray-700);
+      font-size: var(--font-sm);
+      transition: background 0.15s, color 0.15s;
+      border-left: 3px solid transparent;
+    }
+
+    .drawer-link:hover {
+      background: var(--color-primary-light);
+      color: var(--color-primary);
+      text-decoration: none;
+    }
+
+    .drawer-link.active {
+      background: var(--color-primary-light);
+      color: var(--color-primary);
+      border-left-color: var(--color-accent);
+      font-weight: 500;
+    }
+
+    .drawer-link-icon {
+      font-size: 1rem;
+      flex-shrink: 0;
+      width: 20px;
+      text-align: center;
+    }
+
+    .drawer-footer {
+      border-top: 1px solid var(--color-gray-200);
+      padding: var(--space-3) var(--space-4);
+      display: flex;
+      flex-direction: column;
       gap: var(--space-2);
+      flex-shrink: 0;
+    }
+
+    .drawer-footer a {
       font-size: var(--font-xs);
       color: var(--color-gray-500);
-    }
-
-    .breadcrumb a {
-      color: var(--color-gray-500);
       text-decoration: none;
-      display: flex;
-      align-items: center;
-      gap: var(--space-1);
     }
 
-    .breadcrumb a:hover { color: var(--color-primary); text-decoration: none; }
-    .breadcrumb-sep { opacity: 0.4; }
-    .breadcrumb-current { color: var(--color-gray-900); font-weight: 500; }
+    .drawer-footer a:hover { color: var(--color-primary); text-decoration: none; }
 
-    /* ── FOOTER ───────────────────────────────────────── */
+    /* ── FOOTER ────────────────────────────────────────── */
     .site-footer {
       background: var(--color-primary);
       border-top: 3px solid var(--color-accent);
@@ -217,68 +395,102 @@ const currentPath = Astro.url.pathname;
       margin-bottom: 0;
       margin-top: var(--space-4);
     }
+
+    /* ── @media print ──────────────────────────────────── */
+    @media print {
+      .site-header,
+      .drawer,
+      .drawer-overlay,
+      .site-footer {
+        display: none !important;
+      }
+
+      body { background: #ffffff !important; min-height: unset; }
+      main { flex: none; }
+    }
   </style>
 </head>
 <body>
 
-  <!-- ── HEADER ─────────────────────────────────────────── -->
+  <!-- ── HEADER ──────────────────────────────────────────── -->
   <header class="site-header">
     <div class="container">
       <div class="header-inner">
 
-        <a href="/" class="brand" aria-label="edetools — inicio">
-          <span class="brand-name">edetools</span>
-          <div class="brand-dot" aria-hidden="true"></div>
-        </a>
+        <!-- Izquierda: hamburguesa + marca + tool badge -->
+        <div class="header-left">
+          <button class="btn-menu" id="btnMenu" type="button" aria-label="Menú de herramientas" aria-expanded="false" aria-controls="drawer">
+            <span></span><span></span><span></span>
+          </button>
 
+          <a href="/" class="brand" aria-label="edetools — inicio">
+            <span class="brand-name">edetools</span>
+            <div class="brand-dot" aria-hidden="true"></div>
+          </a>
+
+          {toolPage && toolTitle && (
+            <span class="tool-name-badge" aria-label={`Herramienta activa: ${toolTitle}`}>
+              {toolTitle}
+            </span>
+          )}
+        </div>
+
+        <!-- Centro: nav desktop -->
         <nav class="header-nav" aria-label="Navegación principal">
-          <a
-            href="/"
-            class:list={['nav-link', { active: currentPath === '/' }]}
-          >Herramientas</a>
-          <a
-            href="/acerca"
-            class:list={['nav-link', { active: currentPath.startsWith('/acerca') }]}
-          >Acerca</a>
+          <a href="/" class:list={['nav-link', { active: currentPath === '/' }]}>Herramientas</a>
+          <a href="/acerca" class:list={['nav-link', { active: currentPath.startsWith('/acerca') }]}>Acerca</a>
+        </nav>
 
-          <!--
-            AUTH0 — reemplazar este botón con el componente Auth cuando esté configurado.
-            Patrón: mostrar "Iniciar sesión" si no hay sesión, "usuario@mail / Salir" si la hay.
-            Ver: https://auth0.com/docs/libraries/auth0-spa-js
-          -->
+        <!-- Derecha: auth -->
+        <div class="header-right">
           <button class="btn-auth" id="btn-auth" type="button">
             Iniciar sesión
           </button>
-        </nav>
+        </div>
 
       </div>
     </div>
   </header>
 
-  <!-- ── BREADCRUMB (solo en páginas de herramienta) ────── -->
-  {toolPage && (
-    <div class="breadcrumb-bar">
-      <div class="container">
-        <nav class="breadcrumb" aria-label="Ubicación">
-          <a href="/">
-            <span aria-hidden="true">←</span>
-            Herramientas
-          </a>
-          <span class="breadcrumb-sep" aria-hidden="true">/</span>
-          <span class="breadcrumb-current">
-            <slot name="breadcrumb" />
-          </span>
-        </nav>
-      </div>
-    </div>
-  )}
+  <!-- ── DRAWER ──────────────────────────────────────────── -->
+  <div class="drawer-overlay" id="drawerOverlay" aria-hidden="true"></div>
 
-  <!-- ── CONTENIDO DE LA PÁGINA ─────────────────────────── -->
+  <nav class="drawer" id="drawer" aria-label="Herramientas" aria-hidden="true">
+    <div class="drawer-header">
+      <span class="drawer-title">Herramientas</span>
+      <button class="btn-drawer-close" id="btnDrawerClose" type="button" aria-label="Cerrar menú">&times;</button>
+    </div>
+
+    <div class="drawer-body">
+      {tools.map(group => (
+        <div>
+          <p class="drawer-section-title">{group.section}</p>
+          {group.items.map(item => (
+            <a
+              href={item.href}
+              class:list={['drawer-link', { active: currentPath === item.href }]}
+            >
+              <span class="drawer-link-icon" aria-hidden="true">{item.icon}</span>
+              {item.label}
+            </a>
+          ))}
+        </div>
+      ))}
+    </div>
+
+    <div class="drawer-footer">
+      <a href="/acerca">Acerca de edetools</a>
+      <a href="/privacidad">Privacidad</a>
+      <a href="/contacto">Contacto</a>
+    </div>
+  </nav>
+
+  <!-- ── CONTENIDO ───────────────────────────────────────── -->
   <main>
     <slot />
   </main>
 
-  <!-- ── FOOTER ─────────────────────────────────────────── -->
+  <!-- ── FOOTER ──────────────────────────────────────────── -->
   <footer class="site-footer">
     <div class="container">
       <div class="footer-inner">
@@ -299,22 +511,43 @@ const currentPath = Astro.url.pathname;
     </div>
   </footer>
 
-  <!--
-    AUTH0 SCRIPT STUB
-    Cuando estés listo para integrar Auth0:
-    1. npm install @auth0/auth0-spa-js
-    2. Crear src/lib/auth.ts con el cliente Auth0
-    3. Reemplazar este script con la lógica real
-  -->
   <script>
-    // Stub: simula estado de auth para desarrollo
-    // En producción: reemplazar con auth0-spa-js
-    const btnAuth = document.getElementById('btn-auth');
-    if (btnAuth) {
-      btnAuth.addEventListener('click', () => {
-        console.info('[Auth] loginWithRedirect() — pendiente de configurar Auth0');
-      });
+    // ── Drawer ─────────────────────────────────────────────
+    const btnMenu        = document.getElementById('btnMenu')        as HTMLButtonElement;
+    const btnDrawerClose = document.getElementById('btnDrawerClose') as HTMLButtonElement;
+    const drawer         = document.getElementById('drawer')         as HTMLElement;
+    const drawerOverlay  = document.getElementById('drawerOverlay')  as HTMLDivElement;
+
+    function openDrawer() {
+      drawer.classList.add('open');
+      drawerOverlay.classList.add('open');
+      btnMenu.classList.add('open');
+      drawer.setAttribute('aria-hidden', 'false');
+      drawerOverlay.setAttribute('aria-hidden', 'false');
+      btnMenu.setAttribute('aria-expanded', 'true');
+      document.body.style.overflow = 'hidden';
     }
+
+    function closeDrawer() {
+      drawer.classList.remove('open');
+      drawerOverlay.classList.remove('open');
+      btnMenu.classList.remove('open');
+      drawer.setAttribute('aria-hidden', 'true');
+      drawerOverlay.setAttribute('aria-hidden', 'true');
+      btnMenu.setAttribute('aria-expanded', 'false');
+      document.body.style.overflow = '';
+    }
+
+    btnMenu.addEventListener('click',        () => drawer.classList.contains('open') ? closeDrawer() : openDrawer());
+    btnDrawerClose.addEventListener('click', closeDrawer);
+    drawerOverlay.addEventListener('click',  closeDrawer);
+
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+    // ── Auth stub ──────────────────────────────────────────
+    document.getElementById('btn-auth')?.addEventListener('click', () => {
+      console.info('[Auth] loginWithRedirect() — pendiente de configurar Auth0');
+    });
   </script>
 
 </body>

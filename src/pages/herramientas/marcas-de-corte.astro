@@ -8,19 +8,38 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
 <ToolLayout
   title="Marcas de corte"
-  description="Genera marcas de corte para piezas de impresión. Cargá el arte, configurá el tamaño de pieza y hoja, y descargá el SVG listo para enviar a imprenta."
+  description="Generá marcas de corte para piezas de impresión."
   icon="✂️"
+  mode="form"
+  actionLabel="Configuración"
   tags={[
     { label: 'impresión', type: 'print' },
     { label: 'client-side', type: 'web' },
   ]}
 >
 
-  <div class="tool-layout">
+  <!-- Área principal: previsualización SVG -->
+  <div class="mc-main">
 
-    <!-- ── Panel de configuración ──────────────────────── -->
-    <aside class="config-panel">
-      <form id="configForm" novalidate>
+    <!-- ── Panel de previsualización ────────────────────── -->
+    <section class="preview-panel" aria-label="Previsualización">
+      <div class="preview-header">
+        <span class="preview-title">Previsualización</span>
+        <span class="preview-hint" id="previewHint">Completá la configuración y generá el SVG</span>
+      </div>
+      <div class="preview-area" id="svgContainer">
+        <div class="preview-placeholder" id="previewPlaceholder" aria-hidden="true">
+          <span>✂️</span>
+          <small>El SVG aparecerá aquí</small>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- Sidebar: configuración -->
+  <aside slot="sidebar" class="config-sidebar">
+    <form id="configForm" novalidate>
 
         <fieldset>
           <legend>Tamaño de pieza</legend>
@@ -99,214 +118,98 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
       </form>
     </aside>
 
-    <!-- ── Panel de previsualización ────────────────────── -->
-    <section class="preview-panel" aria-label="Previsualización">
-      <div class="preview-header">
-        <span class="preview-title">Previsualización</span>
-        <span class="preview-hint" id="previewHint">Completá la configuración y generá el SVG</span>
-      </div>
-      <div class="preview-area" id="svgContainer">
-        <div class="preview-placeholder" id="previewPlaceholder" aria-hidden="true">
-          <span>✂️</span>
-          <small>El SVG aparecerá aquí</small>
-        </div>
-      </div>
-    </section>
-
-  </div>
-
 </ToolLayout>
 
 <!-- ═══════════════════════════════════════════════════════
      ESTILOS — scoped a esta página
 ════════════════════════════════════════════════════════ -->
 <style>
-  /* Layout de dos columnas */
-  .tool-layout {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: var(--space-6);
-  }
+  /* ── Main: previsualización ─────────────────────── */
+  .mc-main { height: 100%; display: flex; flex-direction: column; }
 
-  @media (min-width: 768px) {
-    .tool-layout {
-      grid-template-columns: 22rem 1fr;
-      align-items: start;
-    }
-  }
-
-  /* ── Panel de configuración ────────────────────────── */
-  .config-panel {
-    background: var(--color-white);
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-lg);
-    padding: var(--space-6);
-  }
-
-  .config-panel fieldset {
-    margin-bottom: var(--space-4);
-    border-color: var(--color-gray-200);
-  }
-
-  .field-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-3);
-  }
-
-  .field { display: flex; flex-direction: column; gap: var(--space-1); }
-
-  .field-hint {
-    font-size: var(--font-xs);
-    color: var(--color-gray-500);
-    margin-bottom: var(--space-2);
-  }
-
-  /* File input custom */
-  .file-label {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-3);
-    border: 2px dashed var(--color-gray-200);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    font-size: var(--font-sm);
-    color: var(--color-gray-500);
-    transition: border-color 0.2s, color 0.2s;
-    text-align: center;
-    font-weight: 500;
-  }
-
-  .file-label:hover {
-    border-color: var(--color-primary);
-    color: var(--color-primary);
-  }
-
-  .file-label input[type="file"] {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  .btn-ghost {
-    background: transparent;
-    border: none;
-    color: var(--color-gray-500);
-    font-size: var(--font-xs);
-    cursor: pointer;
-    padding: var(--space-1) 0;
-    font-family: inherit;
-    text-align: left;
-  }
-
-  .btn-ghost:hover { color: var(--color-accent); background: transparent; }
-
-  /* Grid info */
-  .grid-info {
-    display: flex;
-    gap: var(--space-4);
-    padding: var(--space-3) var(--space-4);
-    background: var(--color-gray-50);
-    border-radius: var(--radius-md);
-    margin-bottom: var(--space-4);
-  }
-
-  .grid-info-item {
-    display: flex;
-    flex-direction: column;
-    gap: 0.1rem;
-  }
-
-  .grid-info-item strong {
-    font-size: var(--font-lg);
-    font-weight: 700;
-    color: var(--color-primary);
-    line-height: 1;
-  }
-
-  .grid-info-item small {
-    font-size: var(--font-xs);
-    color: var(--color-gray-500);
-  }
-
-  /* Botón principal */
-  .btn-generate {
-    width: 100%;
-    padding: var(--space-3);
-    font-size: var(--font-base);
-    font-weight: 600;
-    background: var(--color-accent);
-    border: none;
-    border-radius: var(--radius-md);
-    color: #ffffff;
-    cursor: pointer;
-    font-family: inherit;
-    transition: background 0.2s, transform 0.1s;
-  }
-
-  .btn-generate:hover  { background: #c0303b; }
-  .btn-generate:active { transform: scale(0.98); }
-
-  /* ── Panel de previsualización ──────────────────────── */
   .preview-panel {
-    background: var(--color-white);
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    min-height: 400px;
+    flex: 1; background: var(--color-white); border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-lg); overflow: hidden; display: flex; flex-direction: column;
   }
 
   .preview-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--space-3) var(--space-4);
-    border-bottom: 1px solid var(--color-gray-200);
+    display: flex; align-items: center; justify-content: space-between;
+    padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-gray-200);
     background: var(--color-gray-50);
   }
 
-  .preview-title {
-    font-size: var(--font-sm);
-    font-weight: 600;
-    color: var(--color-gray-700);
-  }
-
-  .preview-hint {
-    font-size: var(--font-xs);
-    color: var(--color-gray-500);
-  }
+  .preview-title { font-size: var(--font-sm); font-weight: 600; color: var(--color-gray-700); }
+  .preview-hint  { font-size: var(--font-xs); color: var(--color-gray-500); }
 
   .preview-area {
-    flex: 1;
-    overflow: auto;
-    padding: var(--space-4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    flex: 1; overflow: auto; padding: var(--space-4);
+    display: flex; align-items: center; justify-content: center;
   }
 
-  .preview-area svg {
-    max-width: 100%;
-    height: auto;
-    display: block;
-    border: 1px dashed var(--color-gray-200);
-  }
+  .preview-area svg { max-width: 100%; height: auto; display: block; border: 1px dashed var(--color-gray-200); }
 
   .preview-placeholder {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: var(--space-2);
-    color: var(--color-gray-500);
+    display: flex; flex-direction: column; align-items: center; gap: var(--space-2); color: var(--color-gray-500);
   }
 
   .preview-placeholder span { font-size: 2.5rem; opacity: 0.3; }
   .preview-placeholder small { font-size: var(--font-xs); }
+
+  /* ── Sidebar: configuración ──────────────────────── */
+  .config-sidebar { display: flex; flex-direction: column; gap: 0; }
+
+  .config-sidebar fieldset {
+    border: 1px solid var(--color-gray-200); border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4); margin-bottom: var(--space-3);
+  }
+
+  .config-sidebar legend {
+    font-size: var(--font-xs); font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--color-gray-500); padding: 0 var(--space-1);
+  }
+
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+  .field { display: flex; flex-direction: column; gap: var(--space-1); }
+
+  .field-hint { font-size: var(--font-xs); color: var(--color-gray-500); margin-bottom: var(--space-2); }
+
+  .file-label {
+    display: flex; align-items: center; justify-content: center;
+    padding: var(--space-3); border: 2px dashed var(--color-gray-200);
+    border-radius: var(--radius-md); cursor: pointer; font-size: var(--font-sm);
+    color: var(--color-gray-500); transition: border-color 0.2s, color 0.2s;
+    text-align: center; font-weight: 500; margin-bottom: 0;
+  }
+
+  .file-label:hover { border-color: var(--color-primary); color: var(--color-primary); }
+
+  .file-label input[type="file"] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+  .btn-ghost {
+    background: transparent; border: none; color: var(--color-gray-500);
+    font-size: var(--font-xs); cursor: pointer; padding: var(--space-1) 0;
+    font-family: inherit; text-align: left;
+  }
+
+  .btn-ghost:hover { color: var(--color-accent); background: transparent; }
+
+  .grid-info {
+    display: flex; gap: var(--space-3); padding: var(--space-2) var(--space-3);
+    background: var(--color-gray-50); border-radius: var(--radius-md); margin-bottom: var(--space-3);
+  }
+
+  .grid-info-item { display: flex; flex-direction: column; gap: 0.1rem; }
+  .grid-info-item strong { font-size: var(--font-lg); font-weight: 700; color: var(--color-primary); line-height: 1; }
+  .grid-info-item small  { font-size: var(--font-xs); color: var(--color-gray-500); }
+
+  .btn-generate {
+    width: 100%; padding: var(--space-3); font-size: var(--font-sm); font-weight: 600;
+    background: var(--color-accent); border: none; border-radius: var(--radius-md);
+    color: #ffffff; cursor: pointer; font-family: inherit; transition: background 0.2s;
+  }
+
+  .btn-generate:hover  { background: #c0303b; }
+  .btn-generate:active { transform: scale(0.98); }
 </style>
 
 <!-- ═══════════════════════════════════════════════════════

@@ -5,8 +5,10 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
 <ToolLayout
   title="Fotos"
-  description="Genera un documento imprimible con múltiples fotos distribuidas automáticamente en hojas de tamaño configurable."
+  description="Distribuí múltiples fotos en hojas de tamaño configurable."
   icon="🖼️"
+  mode="upload"
+  actionLabel="Configuración"
   tags={[
     { label: 'impresión', type: 'print' },
     { label: 'client-side', type: 'web' },
@@ -16,97 +18,102 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   <!-- Estilos dinámicos para @page — se actualizan desde JS -->
   <style id="dynamicStyles"></style>
 
-  <div class="tool-wrap">
+  <!-- Upload slot: selección de fotos centrada -->
+  <div slot="upload" class="fotos-upload">
+    <label class="fotos-upload-zone" for="fileInput">
+      <span class="drop-icon" aria-hidden="true">🖼️</span>
+      <p class="drop-text">Seleccioná las fotos a imprimir</p>
+      <p class="drop-hint">JPG, PNG, WebP · múltiples archivos</p>
+      <input type="file" id="fileInput" multiple accept="image/*" />
+    </label>
+  </div>
 
-    <!-- ── Panel de configuración ──────────────────────── -->
-    <div class="config-grid">
-
-      <!-- Hoja -->
-      <div class="config-card">
-        <h2 class="config-card-title">Hoja</h2>
-
-        <div class="field">
-          <label for="sheetSelect">
-            Tamaño
-            <span id="sheetModBadge" class="mod-badge">personalizado</span>
-          </label>
-          <select id="sheetSelect">
-            <option value="A5">A5 (14.8 × 21 cm)</option>
-            <option value="A4">A4 (21 × 29.7 cm)</option>
-            <option value="23x32" selected>23 × 32 cm</option>
-            <option value="Oficio">Oficio (21.6 × 33 cm)</option>
-            <option value="A3">A3 (29.7 × 42 cm)</option>
-            <option value="SuperA3">Super A3 (32 × 45 cm)</option>
-            <option value="32x47.5">32 × 47.5 cm</option>
-          </select>
-        </div>
-
-        <div class="field-divider"><span>o medida manual</span></div>
-
-        <div class="dim-row">
-          <input type="number" id="sheetW" min="5" max="120" step="0.1" value="23" title="Ancho (cm)" />
-          <span class="dim-sep">×</span>
-          <input type="number" id="sheetH" min="5" max="120" step="0.1" value="32" title="Alto (cm)" />
-          <span class="dim-unit">cm</span>
-        </div>
-        <p class="dim-hint">Ancho × Alto</p>
-
-        <div class="field" style="margin-top: var(--space-3)">
-          <label for="marginSelect">Márgenes</label>
-          <select id="marginSelect">
-            <option value="0.8">0.8 cm</option>
-            <option value="1" selected>1 cm</option>
-            <option value="1.2">1.2 cm</option>
-            <option value="1.5">1.5 cm</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- Fotos -->
-      <div class="config-card">
-        <h2 class="config-card-title">Fotografías</h2>
-
-        <div class="field">
-          <label for="sizeSelect">
-            Tamaño de foto
-            <span id="photoModBadge" class="mod-badge">personalizado</span>
-          </label>
-          <select id="sizeSelect">
-            <option value="">— Seleccionar —</option>
-            <option value="20x25">20 × 25 cm</option>
-            <option value="15x21">15 × 21 cm</option>
-            <option value="13x18">13 × 18 cm</option>
-            <option value="10x15">10 × 15 cm</option>
-            <option value="9x13">9 × 13 cm</option>
-            <option value="6x8">6 × 8 cm</option>
-          </select>
-        </div>
-
-        <div class="field-divider"><span>o medida manual</span></div>
-
-        <div class="dim-row">
-          <input type="number" id="photoW" min="1" max="100" step="0.5" placeholder="—" title="Ancho (cm)" />
-          <span class="dim-sep">×</span>
-          <input type="number" id="photoH" min="1" max="100" step="0.5" placeholder="—" title="Alto (cm)" />
-          <span class="dim-unit">cm</span>
-        </div>
-        <p class="dim-hint">Ancho × Alto</p>
-
-        <div class="field" style="margin-top: var(--space-3)">
-          <label for="fileInput">Seleccionar fotos</label>
-          <input type="file" id="fileInput" multiple accept="image/*" />
-        </div>
-      </div>
-
-    </div>
-
-    <!-- ── Info / errores ───────────────────────────────── -->
+  <!-- Área principal: info + previsualización de configuración -->
+  <div class="fotos-main">
     <div class="info-box" id="infoBox" hidden></div>
-
-    <!-- ── Botón imprimir ───────────────────────────────── -->
     <button class="btn-print" id="printBtn" type="button" disabled>
       Generar e imprimir
     </button>
+  </div>
+
+  <!-- Sidebar: configuración -->
+  <div slot="sidebar" class="fotos-sidebar">
+
+    <div class="sb-section-title">Hoja</div>
+
+    <div class="field">
+      <label for="sheetSelect">
+        Tamaño
+        <span id="sheetModBadge" class="mod-badge">personalizado</span>
+      </label>
+      <select id="sheetSelect">
+        <option value="A5">A5 (14.8 × 21 cm)</option>
+        <option value="A4">A4 (21 × 29.7 cm)</option>
+        <option value="23x32" selected>23 × 32 cm</option>
+        <option value="Oficio">Oficio (21.6 × 33 cm)</option>
+        <option value="A3">A3 (29.7 × 42 cm)</option>
+        <option value="SuperA3">Super A3 (32 × 45 cm)</option>
+        <option value="32x47.5">32 × 47.5 cm</option>
+      </select>
+    </div>
+
+    <div class="field-divider"><span>o medida manual</span></div>
+
+    <div class="dim-row">
+      <input type="number" id="sheetW" min="5" max="120" step="0.1" value="23" title="Ancho (cm)" />
+      <span class="dim-sep">×</span>
+      <input type="number" id="sheetH" min="5" max="120" step="0.1" value="32" title="Alto (cm)" />
+      <span class="dim-unit">cm</span>
+    </div>
+    <p class="dim-hint">Ancho × Alto (cm)</p>
+
+    <div class="field" style="margin-top: var(--space-2)">
+      <label for="marginSelect">Márgenes</label>
+      <select id="marginSelect">
+        <option value="0.8">0.8 cm</option>
+        <option value="1" selected>1 cm</option>
+        <option value="1.2">1.2 cm</option>
+        <option value="1.5">1.5 cm</option>
+      </select>
+    </div>
+
+    <div class="sb-divider"></div>
+    <div class="sb-section-title">Fotografías</div>
+
+    <div class="field">
+      <label for="sizeSelect">
+        Tamaño de foto
+        <span id="photoModBadge" class="mod-badge">personalizado</span>
+      </label>
+      <select id="sizeSelect">
+        <option value="">— Seleccionar —</option>
+        <option value="20x25">20 × 25 cm</option>
+        <option value="15x21">15 × 21 cm</option>
+        <option value="13x18">13 × 18 cm</option>
+        <option value="10x15">10 × 15 cm</option>
+        <option value="9x13">9 × 13 cm</option>
+        <option value="6x8">6 × 8 cm</option>
+      </select>
+    </div>
+
+    <div class="field-divider"><span>o medida manual</span></div>
+
+    <div class="dim-row">
+      <input type="number" id="photoW" min="1" max="100" step="0.5" placeholder="—" title="Ancho (cm)" />
+      <span class="dim-sep">×</span>
+      <input type="number" id="photoH" min="1" max="100" step="0.5" placeholder="—" title="Alto (cm)" />
+      <span class="dim-unit">cm</span>
+    </div>
+    <p class="dim-hint">Ancho × Alto (cm)</p>
+
+    <div class="sb-divider"></div>
+
+    <div class="field">
+      <label class="btn-change-photos" for="fileInputMore">
+        Cambiar fotos
+        <input type="file" id="fileInputMore" multiple accept="image/*" />
+      </label>
+    </div>
 
   </div>
 
@@ -116,182 +123,114 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 </ToolLayout>
 
 <style>
-  /* ── Layout ────────────────────────────────────────── */
-  .tool-wrap {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-    max-width: 56rem;
+  /* ── Upload ─────────────────────────────────────── */
+  .fotos-upload { width: 100%; max-width: 400px; margin: 0 auto; }
+
+  .fotos-upload-zone {
+    display: flex; flex-direction: column; align-items: center; gap: var(--space-2);
+    border: 2px dashed var(--color-gray-200); border-radius: var(--radius-lg);
+    padding: var(--space-8) var(--space-6); text-align: center; cursor: pointer;
+    background: var(--color-white); transition: border-color 0.2s, background 0.2s;
+    position: relative; margin-bottom: 0;
   }
 
-  .config-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-4);
-  }
+  .fotos-upload-zone:hover { border-color: var(--color-primary); background: var(--color-primary-light); }
+  .fotos-upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .drop-icon { font-size: 2rem; }
+  .drop-text { font-size: var(--font-base); color: var(--color-gray-700); margin-bottom: 0; font-weight: 500; }
+  .drop-hint { font-size: var(--font-xs); color: var(--color-gray-500); margin-bottom: 0; }
 
-  @media (max-width: 640px) {
-    .config-grid { grid-template-columns: 1fr; }
-  }
+  /* ── Main ────────────────────────────────────────── */
+  .fotos-main { display: flex; flex-direction: column; gap: var(--space-4); }
 
-  /* ── Config card ───────────────────────────────────── */
-  .config-card {
-    background: var(--color-white);
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-lg);
-    padding: var(--space-6);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
-
-  .config-card-title {
-    font-size: var(--font-sm);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--color-gray-500);
-    margin-bottom: var(--space-1);
-  }
-
-  /* ── Fields ─────────────────────────────────────────── */
-  .field { display: flex; flex-direction: column; gap: var(--space-1); }
-
-  /* Separador entre preset e inputs manuales */
-  .field-divider {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    margin: var(--space-1) 0;
-  }
-
-  .field-divider::before,
-  .field-divider::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: var(--color-gray-200);
-  }
-
-  .field-divider span {
-    font-size: var(--font-xs);
-    color: var(--color-gray-500);
-    white-space: nowrap;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    font-weight: 500;
-  }
-
-  /* Badge "personalizado" */
-  .mod-badge {
-    display: none;
-    font-size: 0.6rem;
-    font-weight: 500;
-    padding: 1px 6px;
-    border-radius: 1rem;
-    background: #fef3c7;
-    color: #92400e;
-    border: 1px solid #fcd34d;
-    vertical-align: middle;
-  }
-
-  .mod-badge.visible { display: inline; }
-
-  /* Dimensiones manuales */
-  .dim-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .dim-row input[type="number"] {
-    width: 80px;
-    flex: 0 0 80px;
-    text-align: center;
-  }
-
-  .dim-sep  { color: var(--color-gray-500); font-weight: 500; }
-  .dim-unit { font-size: var(--font-sm); color: var(--color-gray-500); }
-  .dim-hint { font-size: var(--font-xs); color: var(--color-gray-500); font-style: italic; margin: 0; }
-
-  /* ── Info box ────────────────────────────────────────── */
   .info-box {
-    padding: var(--space-4);
-    border-left: 4px solid var(--color-primary);
-    background: var(--color-primary-light);
-    border-radius: var(--radius-md);
-    font-size: var(--font-sm);
-    line-height: 1.8;
-    color: var(--color-gray-700);
+    padding: var(--space-4); border-left: 4px solid var(--color-primary);
+    background: var(--color-primary-light); border-radius: var(--radius-md);
+    font-size: var(--font-sm); line-height: 1.8; color: var(--color-gray-700);
   }
 
   .info-box.is-error   { background: #fdecea; border-left-color: var(--color-accent); color: #991b1b; }
   .info-box.is-warning { background: #fef3c7; border-left-color: #f59e0b; color: #92400e; }
 
-  /* ── Botón ───────────────────────────────────────────── */
   .btn-print {
-    padding: var(--space-3) var(--space-6);
-    background: var(--color-accent);
-    color: #fff;
-    border: none;
-    border-radius: var(--radius-md);
-    font-size: var(--font-base);
-    font-weight: 600;
-    cursor: pointer;
-    font-family: inherit;
-    transition: background 0.2s, transform 0.1s;
-    align-self: flex-start;
+    padding: var(--space-3) var(--space-6); background: var(--color-accent);
+    color: #fff; border: none; border-radius: var(--radius-md);
+    font-size: var(--font-base); font-weight: 600; font-family: inherit;
+    cursor: pointer; transition: background 0.2s; align-self: flex-start;
   }
 
-  .btn-print:hover:not(:disabled)  { background: #c0303b; }
-  .btn-print:active:not(:disabled) { transform: scale(0.98); }
+  .btn-print:hover:not(:disabled) { background: #c0303b; }
+  .btn-print:disabled { background: var(--color-gray-200); color: var(--color-gray-500); cursor: not-allowed; }
 
-  .btn-print:disabled {
-    background: var(--color-gray-200);
-    color: var(--color-gray-500);
-    cursor: not-allowed;
+  /* ── Sidebar ─────────────────────────────────────── */
+  .fotos-sidebar { display: flex; flex-direction: column; gap: var(--space-3); }
+
+  .sb-section-title {
+    font-size: var(--font-xs); font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--color-gray-500);
   }
 
-  /* ── Área de impresión ───────────────────────────────── */
-  /* Solo visible al imprimir */
+  .sb-divider { height: 1px; background: var(--color-gray-200); margin: var(--space-1) 0; }
+
+  .field { display: flex; flex-direction: column; gap: var(--space-1); }
+
+  .field label {
+    font-size: var(--font-xs); font-weight: 500; color: var(--color-gray-700);
+    display: flex; align-items: center; gap: var(--space-1); margin-bottom: 0;
+  }
+
+  .mod-badge {
+    display: none; font-size: 0.6rem; font-weight: 500; padding: 1px 6px;
+    border-radius: 1rem; background: #fef3c7; color: #92400e;
+    border: 1px solid #fcd34d; vertical-align: middle;
+  }
+
+  .mod-badge.visible { display: inline; }
+
+  .field-divider {
+    display: flex; align-items: center; gap: var(--space-2); margin: var(--space-1) 0;
+  }
+
+  .field-divider::before, .field-divider::after {
+    content: ''; flex: 1; height: 1px; background: var(--color-gray-200);
+  }
+
+  .field-divider span {
+    font-size: var(--font-xs); color: var(--color-gray-500);
+    white-space: nowrap; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500;
+  }
+
+  .dim-row { display: flex; align-items: center; gap: var(--space-2); }
+  .dim-row input[type="number"] { width: 70px; flex: 0 0 70px; text-align: center; }
+  .dim-sep  { color: var(--color-gray-500); font-weight: 500; }
+  .dim-unit { font-size: var(--font-xs); color: var(--color-gray-500); }
+  .dim-hint { font-size: var(--font-xs); color: var(--color-gray-500); font-style: italic; margin: 0; }
+
+  .btn-change-photos {
+    display: flex; align-items: center; justify-content: center;
+    padding: var(--space-2) var(--space-3); background: var(--color-white);
+    color: var(--color-primary); border: 1px dashed var(--color-primary);
+    border-radius: var(--radius-md); font-size: var(--font-sm); font-weight: 500;
+    cursor: pointer; width: 100%; position: relative; transition: background 0.15s;
+    margin-bottom: 0;
+  }
+
+  .btn-change-photos:hover { background: var(--color-primary-light); }
+  .btn-change-photos input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+  /* ── Área de impresión ───────────────────────────── */
   .print-container { display: none; }
 
   @media screen { .print-container { display: none !important; } }
 
   @media print {
-    /* Todo el shell de la app desaparece */
-    .site-header,
-    .breadcrumb-bar,
-    .tool-hero,
-    .tool-body > .container > .tool-wrap,
-    .site-footer { display: none !important; }
-
+    .fotos-main, .fotos-sidebar, .fotos-upload { display: none !important; }
     .print-container { display: block !important; }
-
-    .sheet {
-      page-break-after: always;
-      position: relative;
-      margin: 0;
-      padding: 0;
-    }
-
+    .sheet { page-break-after: always; position: relative; margin: 0; padding: 0; }
     .sheet:last-child { page-break-after: auto; }
-
     .print-area { position: absolute; }
-
-    .photo {
-      position: absolute;
-      margin: 0;
-      padding: 0;
-      border: none;
-      overflow: hidden;
-    }
-
-    .photo img {
-      width: 100%;
-      height: 100%;
-      display: block;
-    }
+    .photo { position: absolute; margin: 0; padding: 0; border: none; overflow: hidden; }
+    .photo img { width: 100%; height: 100%; display: block; }
   }
 </style>
 
@@ -404,8 +343,17 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
   marginSelect.addEventListener('change', updateUI);
 
+  // Wire fileInputMore (sidebar)
+  const fileInputMore = document.getElementById('fileInputMore') as HTMLInputElement;
+  if (fileInputMore) fileInputMore.addEventListener('change', e => {
+    files = Array.from((e.target as HTMLInputElement).files!);
+    (window as any).toolReady();
+    updateUI();
+  });
+
   fileInput.addEventListener('change', e => {
     files = Array.from((e.target as HTMLInputElement).files!);
+    if (files.length) (window as any).toolReady();
     updateUI();
   });
 

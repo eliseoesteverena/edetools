@@ -5,17 +5,28 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
 <ToolLayout
   title="Abrir links"
-  description="Pegá un bloque de texto con URLs (mensajes de WhatsApp, mails, etc.) y abrí todos los links detectados en pestañas nuevas de una sola vez."
+  description="Detectá y abrí todas las URLs de un texto en un clic."
   icon="🔗"
+  mode="form"
+  actionLabel="Acciones"
   tags={[
     { label: 'client-side', type: 'web' },
   ]}
 >
 
-  <div class="tool-wrap">
+  <!-- Área principal: lista de links detectados -->
+  <div class="main-area">
+    <p class="main-placeholder" id="mainPlaceholder">
+      Los links detectados aparecerán aquí.
+    </p>
+    <p class="warn-msg" id="warnMsg" hidden></p>
+    <div class="links-list" id="linksList" aria-live="polite"></div>
+  </div>
 
-    <!-- Entrada -->
-    <div class="input-panel">
+  <!-- Sidebar: entrada + acciones -->
+  <div slot="sidebar" class="sidebar-inner">
+
+    <div class="sb-field">
       <label for="inputArea">Texto con links</label>
       <textarea
         id="inputArea"
@@ -23,8 +34,7 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
       ></textarea>
     </div>
 
-    <!-- Acciones -->
-    <div class="actions-bar">
+    <div class="sb-actions">
       <button class="btn-paste" id="pasteBtn" type="button">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
           <rect x="9" y="2" width="6" height="4" rx="1"/>
@@ -33,138 +43,40 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
         Pegar portapapeles
       </button>
 
-      <div class="actions-right">
+      <div class="sb-count">
         <span class="link-count" id="linkCount" hidden>
-          <strong id="countNum">0</strong> links
+          <strong id="countNum">0</strong> links detectados
         </span>
-        <button class="btn-open" id="openAllBtn" type="button" disabled>
-          Abrir todo
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-            <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
-            <polyline points="15 3 21 3 21 9"/>
-            <line x1="10" y1="14" x2="21" y2="3"/>
-          </svg>
-        </button>
       </div>
+
+      <button class="btn-open" id="openAllBtn" type="button" disabled>
+        Abrir todo
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/>
+          <polyline points="15 3 21 3 21 9"/>
+          <line x1="10" y1="14" x2="21" y2="3"/>
+        </svg>
+      </button>
     </div>
-
-    <!-- Aviso -->
-    <p class="warn-msg" id="warnMsg" hidden></p>
-
-    <!-- Lista de links detectados -->
-    <div class="links-list" id="linksList" aria-live="polite"></div>
 
   </div>
 
 </ToolLayout>
 
 <style>
-  .tool-wrap {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-    max-width: 44rem;
+  /* ── Área principal ─────────────────────────────── */
+  .main-area {
+    height: 100%;
+    overflow-y: auto;
   }
 
-  /* ── Textarea ──────────────────────────────────────── */
-  .input-panel { display: flex; flex-direction: column; gap: var(--space-1); }
-
-  #inputArea {
-    width: 100%;
-    min-height: 180px;
-    resize: vertical;
-    padding: var(--space-3) var(--space-4);
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-md);
-    background: var(--color-white);
-    font-family: monospace;
-    font-size: var(--font-sm);
-    line-height: 1.7;
-    color: var(--color-gray-900);
-    transition: border-color 0.2s;
-  }
-
-  #inputArea:focus {
-    outline: none;
-    border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(26,26,46,0.08);
-  }
-
-  /* ── Barra de acciones ───────────────────────────────── */
-  .actions-bar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
-    flex-wrap: wrap;
-  }
-
-  .actions-right {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-  }
-
-  .link-count {
+  .main-placeholder {
     font-size: var(--font-sm);
     color: var(--color-gray-500);
+    font-style: italic;
+    padding: var(--space-4) 0;
   }
 
-  .link-count strong {
-    color: var(--color-primary);
-    font-weight: 700;
-  }
-
-  /* Botón pegar */
-  .btn-paste {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    padding: var(--space-2) var(--space-4);
-    background: var(--color-white);
-    color: var(--color-gray-700);
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-md);
-    font-size: var(--font-sm);
-    font-weight: 500;
-    font-family: inherit;
-    cursor: pointer;
-    transition: border-color 0.2s, color 0.2s;
-  }
-
-  .btn-paste:hover {
-    border-color: var(--color-primary);
-    color: var(--color-primary);
-    background: var(--color-white);
-  }
-
-  /* Botón abrir todo */
-  .btn-open {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-1);
-    padding: var(--space-2) var(--space-4);
-    background: var(--color-primary);
-    color: #fff;
-    border: none;
-    border-radius: var(--radius-md);
-    font-size: var(--font-sm);
-    font-weight: 600;
-    font-family: inherit;
-    cursor: pointer;
-    transition: background 0.2s, transform 0.1s;
-  }
-
-  .btn-open:hover:not(:disabled)  { background: var(--color-primary-dark); }
-  .btn-open:active:not(:disabled) { transform: scale(0.98); }
-
-  .btn-open:disabled {
-    background: var(--color-gray-200);
-    color: var(--color-gray-500);
-    cursor: not-allowed;
-  }
-
-  /* ── Aviso ───────────────────────────────────────────── */
   .warn-msg {
     font-size: var(--font-xs);
     color: #92400e;
@@ -172,11 +84,10 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     border: 1px solid #fcd34d;
     border-radius: var(--radius-md);
     padding: var(--space-2) var(--space-3);
-    margin: 0;
+    margin-bottom: var(--space-3);
     line-height: 1.6;
   }
 
-  /* ── Lista de links ──────────────────────────────────── */
   .links-list {
     display: flex;
     flex-direction: column;
@@ -206,7 +117,111 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     font-size: var(--font-sm);
     color: var(--color-gray-500);
     font-style: italic;
-    padding: var(--space-2) var(--space-2);
+  }
+
+  /* ── Sidebar ─────────────────────────────────────── */
+  .sidebar-inner {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    height: 100%;
+  }
+
+  .sb-field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    flex: 1;
+  }
+
+  .sb-field label {
+    font-size: var(--font-xs);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-gray-500);
+  }
+
+  #inputArea {
+    flex: 1;
+    min-height: 160px;
+    resize: none;
+    padding: var(--space-3);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-md);
+    background: var(--color-gray-50);
+    font-family: monospace;
+    font-size: var(--font-xs);
+    line-height: 1.7;
+    color: var(--color-gray-900);
+    transition: border-color 0.2s;
+  }
+
+  #inputArea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(26,26,46,0.08);
+  }
+
+  .sb-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .sb-count {
+    font-size: var(--font-xs);
+    color: var(--color-gray-500);
+    min-height: 1.4em;
+  }
+
+  .sb-count strong { color: var(--color-primary); font-weight: 700; }
+
+  .link-count { display: inline; }
+
+  .btn-paste {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-white);
+    color: var(--color-gray-700);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-md);
+    font-size: var(--font-sm);
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .btn-paste:hover { border-color: var(--color-primary); color: var(--color-primary); }
+
+  .btn-open {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-primary);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-md);
+    font-size: var(--font-sm);
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.2s;
+  }
+
+  .btn-open:hover:not(:disabled)  { background: var(--color-primary-dark); }
+  .btn-open:disabled {
+    background: var(--color-gray-200);
+    color: var(--color-gray-500);
+    cursor: not-allowed;
   }
 </style>
 

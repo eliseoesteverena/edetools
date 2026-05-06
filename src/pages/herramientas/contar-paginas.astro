@@ -5,8 +5,10 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
 <ToolLayout
   title="Contar páginas"
-  description="Arrastrá uno o varios PDFs para contar sus páginas y calcular cuántas hojas necesitás según el tipo de impresión."
+  description="Contá páginas de múltiples PDFs y calculá hojas necesarias."
   icon="🔢"
+  mode="upload"
+  actionLabel="Opciones"
   tags={[
     { label: 'pdf', type: 'pdf' },
     { label: 'client-side', type: 'web' },
@@ -19,69 +21,61 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
   ></script>
 
-  <div class="tool-wrap">
-
-    <!-- Drop zone -->
+  <!-- Upload slot: drop zone centrada -->
+  <div slot="upload" class="cp-upload">
     <div class="drop-zone" id="dropZone">
       <input type="file" id="fileInput" accept="application/pdf" multiple />
       <span class="drop-icon" aria-hidden="true">📄</span>
       <p class="drop-text">Arrastrá tus PDFs aquí o <span class="drop-link">hacé clic para seleccionar</span></p>
-      <p class="drop-hint">Se pueden cargar múltiples archivos a la vez</p>
+      <p class="drop-hint">Múltiples archivos · cualquier PDF</p>
     </div>
+  </div>
 
-    <!-- Calculadora (oculta hasta tener resultados) -->
-    <div class="calculator" id="calculator" hidden>
-
-      <div class="calc-header">
-        <h2 class="calc-title">Calculadora de impresión</h2>
-      </div>
-
-      <div class="calc-options">
-        <fieldset>
-          <legend>Páginas por carilla</legend>
-          <div class="radio-row">
-            <label><input type="radio" name="pagesPerSide" value="1" checked /> 1</label>
-            <label><input type="radio" name="pagesPerSide" value="2" /> 2</label>
-            <label><input type="radio" name="pagesPerSide" value="4" /> 4</label>
-          </div>
-        </fieldset>
-
-        <fieldset>
-          <legend>Tipo de impresión</legend>
-          <div class="radio-row">
-            <label><input type="radio" name="printType" value="2" checked /> Doble faz</label>
-            <label><input type="radio" name="printType" value="1" /> Simple faz</label>
-          </div>
-        </fieldset>
-      </div>
-
-      <!-- Totales -->
-      <div class="totals" id="totals"></div>
-
-      <!-- Tamaños detectados -->
-      <div class="sizes-panel" id="sizesPanel" hidden>
-        <p class="sizes-label">Tamaños de página detectados</p>
-        <div class="sizes-list" id="sizesList"></div>
-      </div>
-
+  <!-- Área principal: resultados -->
+  <div class="cp-main">
+    <div class="totals" id="totals"></div>
+    <div class="sizes-panel" id="sizesPanel" hidden>
+      <p class="sizes-label">Tamaños detectados</p>
+      <div class="sizes-list" id="sizesList"></div>
     </div>
-
-    <!-- Listado de archivos -->
     <div class="results" id="results"></div>
+  </div>
+
+  <!-- Sidebar: opciones de cálculo -->
+  <div slot="sidebar" class="cp-sidebar">
+
+    <div class="sb-drop-again">
+      <label class="btn-add-files" for="fileInputMore">
+        + Agregar más PDFs
+        <input type="file" id="fileInputMore" accept="application/pdf" multiple />
+      </label>
+    </div>
+
+    <fieldset>
+      <legend>Páginas por carilla</legend>
+      <div class="radio-col">
+        <label><input type="radio" name="pagesPerSide" value="1" checked /> 1</label>
+        <label><input type="radio" name="pagesPerSide" value="2" /> 2</label>
+        <label><input type="radio" name="pagesPerSide" value="4" /> 4</label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Tipo de impresión</legend>
+      <div class="radio-col">
+        <label><input type="radio" name="printType" value="2" checked /> Doble faz</label>
+        <label><input type="radio" name="printType" value="1" /> Simple faz</label>
+      </div>
+    </fieldset>
 
   </div>
 
 </ToolLayout>
 
 <style>
-  .tool-wrap {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-    max-width: 52rem;
-  }
+  /* ── Upload ─────────────────────────────────────── */
+  .cp-upload { width: 100%; max-width: 440px; margin: 0 auto; }
 
-  /* ── Drop zone ─────────────────────────────────────── */
   .drop-zone {
     position: relative;
     border: 2px dashed var(--color-gray-200);
@@ -91,171 +85,80 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     cursor: pointer;
     background: var(--color-white);
     transition: border-color 0.2s, background 0.2s;
+    width: 100%;
   }
 
-  .drop-zone:hover,
-  .drop-zone.drag-over {
+  .drop-zone:hover, .drop-zone.drag-over {
     border-color: var(--color-primary);
     background: var(--color-primary-light);
   }
 
-  /* Input invisible sobre toda la zona */
   .drop-zone input[type="file"] {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    cursor: pointer;
-    width: 100%;
-    height: 100%;
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
   }
 
-  .drop-icon { font-size: 2rem; display: block; margin-bottom: var(--space-2); }
+  .drop-icon  { font-size: 2rem; display: block; margin-bottom: var(--space-2); }
+  .drop-text  { font-size: var(--font-base); color: var(--color-gray-700); margin-bottom: var(--space-1); }
+  .drop-link  { color: var(--color-primary); font-weight: 600; }
+  .drop-hint  { font-size: var(--font-xs); color: var(--color-gray-500); margin-bottom: 0; }
 
-  .drop-text {
-    font-size: var(--font-base);
-    color: var(--color-gray-700);
-    margin-bottom: var(--space-1);
+  /* ── Main area ───────────────────────────────────── */
+  .cp-main { display: flex; flex-direction: column; gap: var(--space-3); }
+
+  /* ── Sidebar ─────────────────────────────────────── */
+  .cp-sidebar { display: flex; flex-direction: column; gap: var(--space-4); }
+
+  .btn-add-files {
+    display: flex; align-items: center; justify-content: center;
+    padding: var(--space-2) var(--space-4);
+    background: var(--color-white); color: var(--color-primary);
+    border: 1px dashed var(--color-primary); border-radius: var(--radius-md);
+    font-size: var(--font-sm); font-weight: 500; cursor: pointer;
+    width: 100%; position: relative; transition: background 0.15s;
   }
 
-  .drop-link { color: var(--color-primary); font-weight: 600; }
+  .btn-add-files:hover { background: var(--color-primary-light); }
 
-  .drop-hint {
-    font-size: var(--font-xs);
-    color: var(--color-gray-500);
-    margin-bottom: 0;
+  .btn-add-files input[type="file"] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
   }
 
-  /* ── Calculadora ───────────────────────────────────── */
-  .calculator {
-    background: var(--color-white);
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-lg);
-    padding: var(--space-6);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
+  .cp-sidebar fieldset {
+    border: 1px solid var(--color-gray-200); border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4); margin: 0;
   }
 
-  .calc-title {
-    font-size: var(--font-base);
-    font-weight: 600;
-    color: var(--color-gray-900);
-    margin-bottom: 0;
+  .cp-sidebar legend {
+    font-size: var(--font-xs); font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--color-gray-500); padding: 0 var(--space-1);
   }
 
-  .calc-options {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-4);
-  }
+  .radio-col { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
+  .radio-col label { display: flex; align-items: center; gap: var(--space-2); font-size: var(--font-sm); font-weight: 400; cursor: pointer; margin: 0; }
+  .radio-col input { width: auto; cursor: pointer; }
 
-  @media (max-width: 480px) {
-    .calc-options { grid-template-columns: 1fr; }
-  }
-
-  .calc-options fieldset {
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-md);
-    padding: var(--space-3) var(--space-4);
-    margin: 0;
-  }
-
-  .calc-options legend {
-    font-size: var(--font-sm);
-    font-weight: 600;
-    padding: 0 var(--space-1);
-    color: var(--color-gray-700);
-  }
-
-  .radio-row {
-    display: flex;
-    gap: var(--space-4);
-    margin-top: var(--space-2);
-  }
-
-  .radio-row label {
-    display: flex;
-    align-items: center;
-    gap: var(--space-1);
-    font-size: var(--font-sm);
-    font-weight: 400;
-    color: var(--color-gray-700);
-    cursor: pointer;
-    margin: 0;
-  }
-
-  .radio-row input { width: auto; cursor: pointer; }
-
-  /* ── Totales ────────────────────────────────────────── */
-  .totals {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-3);
-  }
+  /* ── Totales ─────────────────────────────────────── */
+  .totals { display: flex; flex-wrap: wrap; gap: var(--space-3); }
 
   .total-card {
-    flex: 1;
-    min-width: 100px;
-    background: var(--color-gray-50);
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-md);
-    padding: var(--space-3) var(--space-4);
-    text-align: center;
+    flex: 1; min-width: 80px;
+    background: var(--color-white); border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); text-align: center;
   }
 
-  .total-card .t-label {
-    font-size: var(--font-xs);
-    color: var(--color-gray-500);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: var(--space-1);
-  }
-
-  .total-card .t-value {
-    font-size: var(--font-3xl);
-    font-weight: 700;
-    line-height: 1;
-  }
-
+  .total-card .t-label { font-size: var(--font-xs); color: var(--color-gray-500); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: var(--space-1); }
+  .total-card .t-value { font-size: var(--font-3xl); font-weight: 700; line-height: 1; }
   .total-card.primary .t-value { color: var(--color-primary); }
   .total-card.success .t-value { color: #166534; }
   .total-card.warning .t-value { color: #92400e; }
 
-  /* ── Tamaños ────────────────────────────────────────── */
-  .sizes-panel {
-    background: var(--color-gray-50);
-    border-radius: var(--radius-md);
-    padding: var(--space-3) var(--space-4);
-  }
-
-  .sizes-label {
-    font-size: var(--font-xs);
-    font-weight: 600;
-    color: var(--color-gray-500);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    margin-bottom: var(--space-2);
-  }
-
+  /* ── Tamaños ─────────────────────────────────────── */
+  .sizes-panel { background: var(--color-gray-50); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); }
+  .sizes-label { font-size: var(--font-xs); font-weight: 600; color: var(--color-gray-500); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: var(--space-2); }
   .sizes-list { display: flex; flex-wrap: wrap; gap: var(--space-1); }
 
-  .size-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: var(--font-xs);
-    font-weight: 600;
-    padding: 0.15rem 0.5rem;
-    border-radius: 2rem;
-    white-space: nowrap;
-  }
-
-  .size-badge .count {
-    background: rgba(0,0,0,0.1);
-    border-radius: 1rem;
-    padding: 0 5px;
-    font-weight: 400;
-  }
+  .size-badge { display: inline-flex; align-items: center; gap: 4px; font-size: var(--font-xs); font-weight: 600; padding: 0.15rem 0.5rem; border-radius: 2rem; white-space: nowrap; }
+  .size-badge .count { background: rgba(0,0,0,0.1); border-radius: 1rem; padding: 0 5px; font-weight: 400; }
 
   .sz-a3     { background: #e3f2fd; color: #1565c0; }
   .sz-a4     { background: #e8f5e9; color: #2e7d32; }
@@ -263,72 +166,23 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   .sz-letter { background: #fce4ec; color: #880e4f; }
   .sz-other  { background: #f3e5f5; color: #6a1b9a; }
 
-  /* ── Resultados por archivo ─────────────────────────── */
-  .results {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
+  /* ── Results ─────────────────────────────────────── */
+  .results { display: flex; flex-direction: column; gap: var(--space-2); }
 
   .result-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-4);
-    padding: var(--space-3) var(--space-4);
-    border-radius: var(--radius-md);
-    background: var(--color-white);
-    border: 1px solid var(--color-gray-200);
+    display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
+    padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
+    background: var(--color-white); border: 1px solid var(--color-gray-200);
   }
 
-  .result-item.is-error {
-    background: #fdecea;
-    border-color: #f5c6cb;
-  }
-
+  .result-item.is-error { background: #fdecea; border-color: #f5c6cb; }
   .result-info { flex: 1; min-width: 0; }
-
-  .result-name {
-    font-size: var(--font-sm);
-    font-weight: 500;
-    color: var(--color-gray-900);
-    word-break: break-all;
-    margin-bottom: 2px;
-  }
-
-  .result-sheets {
-    font-size: var(--font-xs);
-    color: var(--color-gray-500);
-  }
-
-  .result-pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 3px;
-    margin-top: 4px;
-  }
-
-  .size-pill {
-    font-size: 0.6rem;
-    font-weight: 600;
-    padding: 1px 6px;
-    border-radius: 1rem;
-  }
-
-  .result-pages {
-    font-size: var(--font-xl);
-    font-weight: 700;
-    color: var(--color-primary);
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-
+  .result-name { font-size: var(--font-sm); font-weight: 500; color: var(--color-gray-900); word-break: break-all; margin-bottom: 2px; }
+  .result-sheets { font-size: var(--font-xs); color: var(--color-gray-500); }
+  .result-pills { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+  .size-pill { font-size: 0.6rem; font-weight: 600; padding: 1px 6px; border-radius: 1rem; }
+  .result-pages { font-size: var(--font-xl); font-weight: 700; color: var(--color-primary); white-space: nowrap; flex-shrink: 0; }
   .result-item.is-error .result-pages { color: var(--color-accent); }
-
-  @media (max-width: 480px) {
-    .result-item { flex-wrap: wrap; }
-    .result-pages { align-self: flex-end; }
-  }
 </style>
 
 <script>
@@ -341,7 +195,6 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   // ── Referencias ──────────────────────────────────────
   const dropZone   = document.getElementById('dropZone')   as HTMLDivElement;
   const fileInput  = document.getElementById('fileInput')  as HTMLInputElement;
-  const calculator = document.getElementById('calculator') as HTMLDivElement;
   const totalsEl   = document.getElementById('totals')     as HTMLDivElement;
   const sizesPanel = document.getElementById('sizesPanel') as HTMLDivElement;
   const sizesList  = document.getElementById('sizesList')  as HTMLDivElement;
@@ -352,6 +205,10 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
   // ── Drag & drop ──────────────────────────────────────
   fileInput.addEventListener('change', e => handleFiles((e.target as HTMLInputElement).files!));
+
+  // Botón "Agregar más" en el sidebar
+  const fileInputMore = document.getElementById('fileInputMore') as HTMLInputElement;
+  if (fileInputMore) fileInputMore.addEventListener('change', e => handleFiles((e.target as HTMLInputElement).files!));
 
   ['dragenter','dragover','dragleave','drop'].forEach(ev =>
     dropZone.addEventListener(ev, e => e.preventDefault())
@@ -430,11 +287,9 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
   // ── Render ────────────────────────────────────────────
   function renderResults() {
-    if (!pdfData.length) {
-      calculator.hidden = true;
-      return;
-    }
-    calculator.hidden = false;
+    if (!pdfData.length) return;
+    // Activate working layout
+    (window as any).toolReady();
     calculateAndRender();
   }
 

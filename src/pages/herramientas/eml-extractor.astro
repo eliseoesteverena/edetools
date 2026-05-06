@@ -5,8 +5,10 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
 <ToolLayout
   title="Extractor de EMLs"
-  description="Cargá un .zip con archivos .eml y extraé todos los adjuntos e imágenes embebidas en un único archivo .zip listo para descargar."
+  description="Extraé adjuntos de archivos .eml desde un ZIP."
   icon="📧"
+  mode="upload"
+  actionLabel="Proceso"
   tags={[
     { label: 'eml', type: 'email' },
     { label: 'client-side', type: 'web' },
@@ -275,6 +277,7 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   function setFile(f: File) {
     selectedFile = f;
     filenameEl.textContent = f.name;
+    (window as any).toolReady();
     processBtn.disabled = false;
     downloadBtn.style.display = 'none';
     logEl.innerHTML = '';
