@@ -2,7 +2,6 @@
 // src/pages/herramientas/marcas-de-corte.astro
 // Herramienta: Generador de Marcas de Corte
 // Lógica 100% client-side — sin dependencias de servidor.
-// Migrado desde PHP (auth.php eliminado; Auth0 manejará auth a nivel de layout cuando esté listo).
 import ToolLayout from '../../layouts/ToolLayout.astro';
 ---
 
@@ -25,12 +24,19 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     <section class="preview-panel" aria-label="Previsualización">
       <div class="preview-header">
         <span class="preview-title">Previsualización</span>
-        <span class="preview-hint" id="previewHint">Completá la configuración y generá el SVG</span>
+        <span class="preview-hint" id="previewHint">Completá la configuración</span>
       </div>
+      <!-- Grid background + sheet card + SVG inside -->
       <div class="preview-area" id="svgContainer">
-        <div class="preview-placeholder" id="previewPlaceholder" aria-hidden="true">
-          <span>✂️</span>
-          <small>El SVG aparecerá aquí</small>
+        <div class="preview-grid-bg" id="previewGridBg">
+          <div class="preview-sheet-card" id="previewSheetCard">
+            <div class="preview-svg-inner" id="previewSvgInner">
+              <div class="preview-placeholder" id="previewPlaceholder" aria-hidden="true">
+                <span>✂️</span>
+                <small>El SVG aparecerá aquí</small>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -111,8 +117,9 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
           </span>
         </div>
 
+        <!-- Renamed: was "Generar y descargar SVG", now just "Descargar" -->
         <button type="submit" id="generateBtn" class="btn-generate">
-          Generar y descargar SVG
+          Descargar
         </button>
 
       </form>
@@ -141,12 +148,52 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   .preview-title { font-size: var(--font-sm); font-weight: 600; color: var(--color-gray-700); }
   .preview-hint  { font-size: var(--font-xs); color: var(--color-gray-500); }
 
+  /* ── Preview area with grid background ─────────── */
   .preview-area {
-    flex: 1; overflow: auto; padding: var(--space-4);
+    flex: 1; overflow: auto;
     display: flex; align-items: center; justify-content: center;
+    padding: var(--space-6);
   }
 
-  .preview-area svg { max-width: 100%; height: auto; display: block; border: 1px dashed var(--color-gray-200); }
+  /* Outer grid background fills the whole preview-area */
+  .preview-grid-bg {
+    width: 100%; height: 100%; min-height: 320px;
+    display: flex; align-items: center; justify-content: center;
+    background-color: #f0f2f5;
+    background-image:
+      linear-gradient(to right, #d5d8de 1px, transparent 1px),
+      linear-gradient(to bottom, #d5d8de 1px, transparent 1px);
+    background-size: 20px 20px;
+    border-radius: var(--radius-md);
+    padding: var(--space-6);
+  }
+
+  /* White sheet card with shadow — represents the paper */
+  .preview-sheet-card {
+    background: #ffffff;
+    box-shadow: 0 4px 24px 0 rgba(0,0,0,0.18), 0 1px 4px 0 rgba(0,0,0,0.08);
+    border-radius: 2px;
+    /* Aspect ratio is set dynamically via JS inline styles */
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+    transition: width 0.2s, height 0.2s;
+    /* Default proportions before JS loads */
+    width: 200px; height: 296px;
+    max-width: 100%; max-height: 100%;
+    flex-shrink: 0;
+  }
+
+  /* Inner SVG wrapper fills the sheet card */
+  .preview-svg-inner {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+
+  .preview-svg-inner svg {
+    width: 100%; height: 100%;
+    display: block;
+  }
 
   .preview-placeholder {
     display: flex; flex-direction: column; align-items: center; gap: var(--space-2); color: var(--color-gray-500);
@@ -209,78 +256,30 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   }
 
   .btn-generate:hover  { background: #c0303b; }
-  .btn-generate:active { transform: scale(0.98); }
+  .btn-generate:disabled { background: var(--color-gray-200); color: var(--color-gray-500); cursor: not-allowed; }
 </style>
 
 <!-- ═══════════════════════════════════════════════════════
-     SCRIPT — lógica original conservada, refactorizada
+     SCRIPT — lógica con preview automático en cada input
 ════════════════════════════════════════════════════════ -->
 <script>
 (function () {
   // ── Referencias al DOM ─────────────────────────────
-  const form        = document.getElementById('configForm')    as HTMLFormElement;
-  const container   = document.getElementById('svgContainer')  as HTMLDivElement;
-  const fileInput   = document.getElementById('artworkFile')   as HTMLInputElement;
-  const fileLabel   = document.getElementById('fileLabel')     as HTMLSpanElement;
-  const clearBtn    = document.getElementById('clearArtwork')  as HTMLButtonElement;
-  const previewHint = document.getElementById('previewHint')   as HTMLSpanElement;
-  const placeholder = document.getElementById('previewPlaceholder') as HTMLDivElement;
-  const infoGrid    = document.getElementById('infoGrid')      as HTMLElement;
-  const infoCols    = document.getElementById('infoCols')      as HTMLElement;
-  const infoRows    = document.getElementById('infoRows')      as HTMLElement;
+  const form          = document.getElementById('configForm')       as HTMLFormElement;
+  const svgContainer  = document.getElementById('svgContainer')     as HTMLDivElement;
+  const previewInner  = document.getElementById('previewSvgInner')  as HTMLDivElement;
+  const sheetCard     = document.getElementById('previewSheetCard') as HTMLDivElement;
+  const fileInput     = document.getElementById('artworkFile')      as HTMLInputElement;
+  const fileLabel     = document.getElementById('fileLabel')        as HTMLSpanElement;
+  const clearBtn      = document.getElementById('clearArtwork')     as HTMLButtonElement;
+  const previewHint   = document.getElementById('previewHint')      as HTMLSpanElement;
+  const placeholder   = document.getElementById('previewPlaceholder') as HTMLDivElement;
+  const infoGrid      = document.getElementById('infoGrid')         as HTMLElement;
+  const infoCols      = document.getElementById('infoCols')         as HTMLElement;
+  const infoRows      = document.getElementById('infoRows')         as HTMLElement;
 
   let artworkData: { type: 'svg' | 'raster'; content: string; width: number; height: number } | null = null;
-
-  // ── Actualizar info de grilla en tiempo real ────────
-  function updateGridInfo() {
-    const cfg  = getConfig();
-    const grid = calculateGrid(cfg);
-    infoCols.textContent = String(grid.cols);
-    infoRows.textContent = String(grid.rows);
-    infoGrid.textContent = String(grid.cols * grid.rows);
-  }
-
-  ['pieceWidth','pieceHeight','sheetWidth','sheetHeight','margin'].forEach(id => {
-    document.getElementById(id)?.addEventListener('input', updateGridInfo);
-  });
-
-  updateGridInfo();
-
-  // ── Submit del formulario ───────────────────────────
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const config  = getConfig();
-    const grid    = calculateGrid(config);
-    const crosses = getCrossPositions(config, grid.cols, grid.rows);
-    const svg     = generateSVG(config, grid, crosses, artworkData);
-    renderSVG(svg);
-    downloadSVG(svg);
-  });
-
-  // ── Manejo de archivo de arte ───────────────────────
-  fileInput.addEventListener('change', () => {
-    const file = fileInput.files?.[0];
-    if (!file) return;
-
-    if (file.type === 'image/svg+xml') {
-      readSVG(file);
-    } else if (/^image\/(png|jpe?g)$/.test(file.type)) {
-      readRaster(file);
-    } else {
-      alert('Formato no soportado. Solo SVG, PNG o JPG.');
-      return;
-    }
-
-    fileLabel.textContent = file.name;
-    clearBtn.style.display = 'inline';
-  });
-
-  clearBtn.addEventListener('click', () => {
-    artworkData = null;
-    fileInput.value = '';
-    fileLabel.textContent = 'Elegir archivo…';
-    clearBtn.style.display = 'none';
-  });
+  let lastSvg = '';
 
   // ── Config ─────────────────────────────────────────
   function getConfig() {
@@ -353,7 +352,6 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     config: ReturnType<typeof getConfig>,
     grid:   ReturnType<typeof calculateGrid>,
     crosses: { x: number; y: number }[],
-    _art: typeof artworkData,
   ) {
     const { sheetWidth, sheetHeight, strokeWidth, crossArm } = config;
     const cutMarks = crosses.map(c => generateCross(c.x, c.y, crossArm, strokeWidth)).join('');
@@ -366,13 +364,58 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     </svg>`;
   }
 
-  // ── Render + descarga ───────────────────────────────
-  function renderSVG(svg: string) {
-    placeholder?.remove();
-    container.innerHTML = svg;
-    if (previewHint) previewHint.textContent = 'SVG generado — descarga iniciada';
+  // ── Actualizar sheet card aspect ratio ──────────────
+  function updateSheetCardSize(sheetWidth: number, sheetHeight: number) {
+    // Fit within a max area while preserving aspect ratio
+    const MAX_W = 320;
+    const MAX_H = 480;
+    const aspect = sheetWidth / sheetHeight;
+    let w: number, h: number;
+
+    if (aspect >= 1) {
+      w = MAX_W;
+      h = Math.round(MAX_W / aspect);
+      if (h > MAX_H) { h = MAX_H; w = Math.round(MAX_H * aspect); }
+    } else {
+      h = MAX_H;
+      w = Math.round(MAX_H * aspect);
+      if (w > MAX_W) { w = MAX_W; h = Math.round(MAX_W / aspect); }
+    }
+
+    sheetCard.style.width  = `${w}px`;
+    sheetCard.style.height = `${h}px`;
   }
 
+  // ── Render preview (called on every input change) ───
+  function renderPreview() {
+    const config  = getConfig();
+    const grid    = calculateGrid(config);
+    const crosses = getCrossPositions(config, grid.cols, grid.rows);
+
+    // Update grid info badges
+    infoCols.textContent = String(grid.cols);
+    infoRows.textContent = String(grid.rows);
+    infoGrid.textContent = String(grid.cols * grid.rows);
+
+    // Basic validation before rendering
+    if (!config.sheetWidth || !config.sheetHeight || !config.pieceWidth || !config.pieceHeight) return;
+
+    // Update sheet card proportions
+    updateSheetCardSize(config.sheetWidth, config.sheetHeight);
+
+    // Generate SVG
+    const svg = generateSVG(config, grid, crosses);
+    lastSvg = svg;
+
+    // Remove placeholder if still present
+    placeholder?.remove();
+
+    // Render SVG inside the sheet card
+    previewInner.innerHTML = svg;
+    if (previewHint) previewHint.textContent = `${grid.cols} col × ${grid.rows} fil — ${grid.cols * grid.rows} piezas`;
+  }
+
+  // ── Descarga del SVG ────────────────────────────────
   function downloadSVG(svg: string) {
     const blob = new Blob([svg], { type: 'image/svg+xml' });
     const url  = URL.createObjectURL(blob);
@@ -385,6 +428,44 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }
+
+  // ── Submit del formulario → solo descarga ───────────
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (lastSvg) downloadSVG(lastSvg);
+  });
+
+  // ── Escuchar cambios en todos los inputs ────────────
+  const watchIds = ['pieceWidth', 'pieceHeight', 'sheetWidth', 'sheetHeight', 'margin', 'crossArm'];
+  watchIds.forEach(id => {
+    document.getElementById(id)?.addEventListener('input', renderPreview);
+  });
+
+  // ── Manejo de archivo de arte ───────────────────────
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+
+    if (file.type === 'image/svg+xml') {
+      readSVG(file);
+    } else if (/^image\/(png|jpe?g)$/.test(file.type)) {
+      readRaster(file);
+    } else {
+      alert('Formato no soportado. Solo SVG, PNG o JPG.');
+      return;
+    }
+
+    fileLabel.textContent = file.name;
+    clearBtn.style.display = 'inline';
+  });
+
+  clearBtn.addEventListener('click', () => {
+    artworkData = null;
+    fileInput.value = '';
+    fileLabel.textContent = 'Elegir archivo…';
+    clearBtn.style.display = 'none';
+    renderPreview();
+  });
 
   // ── Lectura de archivos ─────────────────────────────
   function readSVG(file: File) {
@@ -399,6 +480,7 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
           doc.documentElement.width.baseVal.value,
           doc.documentElement.height.baseVal.value];
       artworkData = { type: 'svg', content: inner, width: vb[2], height: vb[3] };
+      renderPreview();
     };
     r.readAsText(file);
   }
@@ -414,10 +496,14 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
           width:  img.naturalWidth,
           height: img.naturalHeight,
         };
+        renderPreview();
       };
       img.src = r.result as string;
     };
     r.readAsDataURL(file);
   }
+
+  // ── Init: render inmediato con valores por defecto ──
+  renderPreview();
 })();
 </script>
