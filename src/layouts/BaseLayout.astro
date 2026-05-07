@@ -1,15 +1,15 @@
 ---
 // src/layouts/BaseLayout.astro
-// Layout raíz — rediseño inspirado en iLovePDF.
 //
-// Header con dos menús separados:
-//   - Izquierda: hamburguesa → drawer con lista de herramientas por sección
-//   - Derecha:   cuenta/auth (stub Auth0)
+// Header adaptativo:
+//   Mobile  (<768px): hamburguesa → drawer lateral
+//   Desktop (≥768px): links directos + megamenú desplegable "Todas"
 //
 // Props:
 //   title       – <title> de la página
 //   description – meta description
-//   toolPage    – muestra el nombre de la herramienta activa en el header
+//   toolPage    – true en páginas de herramienta
+//   toolTitle   – nombre de la herramienta activa (badge en mobile)
 
 interface Props {
   title: string;
@@ -27,25 +27,32 @@ const {
 
 const currentPath = Astro.url.pathname;
 
-// Lista de herramientas para el drawer de navegación
-const tools = [
+// Herramientas destacadas en el navbar desktop (acceso directo)
+const featuredNav = [
+  { href: '/herramientas/marcas-de-corte',   label: 'Marcas de corte' },
+  { href: '/herramientas/contar-paginas',     label: 'Contar páginas'  },
+  { href: '/herramientas/recorte-etiquetas',  label: 'Etiquetas'       },
+  { href: '/herramientas/fotos',              label: 'Fotos'           },
+];
+
+// Todas las herramientas para el megamenú y el drawer mobile
+const allTools = [
   {
     section: 'Impresión',
     items: [
-      { href: '/herramientas/marcas-de-corte',    label: 'Marcas de corte',           icon: '✂️'  },
-      { href: '/herramientas/fotos',              label: 'Fotos',                     icon: '🖼️' },
-      { href: '/herramientas/recorte-etiquetas',  label: 'Recorte de etiquetas',      icon: '📦'  },
-      { href: '/herramientas/whatsapp-imprimible',label: 'WhatsApp Imprimible',        icon: '💬'  },
-      { href: '/herramientas/carta-documento',    label: 'Carta Documento',           icon: '📄'  },
+      { href: '/herramientas/marcas-de-corte',     label: 'Marcas de corte',         icon: '✂️'  },
+      { href: '/herramientas/fotos',               label: 'Fotos',                   icon: '🖼️' },
+      { href: '/herramientas/recorte-etiquetas',   label: 'Recorte de etiquetas',    icon: '📦'  },
+      { href: '/herramientas/whatsapp-imprimible', label: 'WhatsApp Imprimible',      icon: '💬'  },
+      { href: '/herramientas/carta-documento',     label: 'Carta Documento',         icon: '📄'  },
     ],
   },
   {
     section: 'Archivos PDF',
     items: [
-      { href: '/herramientas/contar-paginas',          label: 'Contar páginas',              icon: '🔢' },
-      { href: '/herramientas/extractor-primera-pagina',label: 'Extractor de primera página', icon: '📑' },
-      { href: '/herramientas/dividir-stickers',        label: 'Dividir stickers',            icon: '🪄' },
-      { href: '/herramientas/recorte-etiquetas',       label: 'Recorte de etiquetas',        icon: '📦' },
+      { href: '/herramientas/contar-paginas',           label: 'Contar páginas',              icon: '🔢' },
+      { href: '/herramientas/extractor-primera-pagina', label: 'Extractor de primera página', icon: '📑' },
+      { href: '/herramientas/dividir-stickers',         label: 'Dividir stickers',            icon: '🪄' },
     ],
   },
   {
@@ -72,16 +79,12 @@ const tools = [
 
   <style>
     /* ── Shell ─────────────────────────────────────────── */
-    body {
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      background-color: var(--color-gray-50);
-    }
-
+    body { min-height: 100vh; display: flex; flex-direction: column; background-color: var(--color-gray-50); }
     main { flex: 1; }
 
-    /* ── HEADER ────────────────────────────────────────── */
+    /* ════════════════════════════════════════════════════
+       HEADER
+    ════════════════════════════════════════════════════ */
     .site-header {
       background: var(--color-primary);
       border-bottom: 3px solid var(--color-accent);
@@ -95,54 +98,16 @@ const tools = [
       height: 100%;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: var(--space-2);
+      gap: var(--space-3);
     }
 
-    .header-left,
-    .header-right {
-      display: flex;
-      align-items: center;
-      gap: var(--space-2);
-    }
-
-    /* Botón hamburguesa */
-    .btn-menu {
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      gap: 5px;
-      width: 36px;
-      height: 36px;
-      padding: 8px;
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      border-radius: var(--radius-md);
-      flex-shrink: 0;
-      transition: background 0.15s;
-    }
-
-    .btn-menu:hover { background: rgba(255,255,255,0.08); }
-
-    .btn-menu span {
-      display: block;
-      height: 2px;
-      background: #ffffff;
-      border-radius: 2px;
-      transition: transform 0.2s, opacity 0.2s;
-    }
-
-    .btn-menu.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
-    .btn-menu.open span:nth-child(2) { opacity: 0; }
-    .btn-menu.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
-
-    /* Marca */
+    /* ── Marca ─────────────────────────────────────────── */
     .brand {
       display: flex;
       align-items: center;
       gap: 0.3rem;
       text-decoration: none;
+      flex-shrink: 0;
     }
 
     .brand-name {
@@ -161,7 +126,44 @@ const tools = [
       margin-bottom: -2px;
     }
 
-    /* Nombre de herramienta activa (solo en tool pages) */
+    /* ── Hamburguesa — SOLO mobile ─────────────────────── */
+    .btn-menu {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 5px;
+      width: 36px;
+      height: 36px;
+      padding: 8px;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      border-radius: var(--radius-md);
+      flex-shrink: 0;
+      transition: background 0.15s;
+      order: -1; /* antes de la marca en mobile */
+    }
+
+    .btn-menu:hover { background: rgba(255,255,255,0.08); }
+
+    .btn-menu span {
+      display: block;
+      height: 2px;
+      background: #ffffff;
+      border-radius: 2px;
+      transition: transform 0.2s, opacity 0.2s;
+    }
+
+    .btn-menu.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .btn-menu.open span:nth-child(2) { opacity: 0; }
+    .btn-menu.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+    /* Ocultar hamburguesa en desktop */
+    @media (min-width: 768px) {
+      .btn-menu { display: none; }
+    }
+
+    /* ── Badge herramienta activa (mobile) ─────────────── */
     .tool-name-badge {
       display: none;
       font-size: var(--font-xs);
@@ -170,46 +172,198 @@ const tools = [
       border: 1px solid var(--color-gray-700);
       border-radius: var(--radius-sm);
       white-space: nowrap;
-      max-width: 160px;
+      max-width: 150px;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
-    @media (min-width: 480px) {
+    @media (min-width: 400px) and (max-width: 767px) {
       .tool-name-badge { display: inline-block; }
     }
 
-    /* Nav links (solo desktop) */
-    .header-nav {
+    /* ════════════════════════════════════════════════════
+       DESKTOP NAV
+    ════════════════════════════════════════════════════ */
+    .desktop-nav {
       display: none;
       align-items: center;
-      gap: var(--space-4);
+      gap: 0;
+      flex: 1;
+      height: 100%;
     }
 
     @media (min-width: 768px) {
-      .header-nav { display: flex; }
+      .desktop-nav { display: flex; }
+    }
+
+    /* Links directos */
+    .nav-direct {
+      display: flex;
+      align-items: center;
+      height: 100%;
     }
 
     .nav-link {
+      display: flex;
+      align-items: center;
+      height: 100%;
+      padding: 0 var(--space-3);
       font-size: var(--font-sm);
-      color: var(--color-gray-500);
+      font-weight: 500;
+      color: rgba(255,255,255,0.65);
       text-decoration: none;
-      transition: color 0.2s;
-      padding: var(--space-1) 0;
-      border-bottom: 2px solid transparent;
+      white-space: nowrap;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -3px; /* compensar border-bottom del header */
+      transition: color 0.15s, border-color 0.15s;
     }
 
     .nav-link:hover          { color: #ffffff; text-decoration: none; }
     .nav-link.active         { color: #ffffff; border-bottom-color: var(--color-accent); }
 
-    /* Botón auth */
+    /* Separador */
+    .nav-sep {
+      width: 1px;
+      height: 18px;
+      background: rgba(255,255,255,0.15);
+      margin: 0 var(--space-2);
+      flex-shrink: 0;
+    }
+
+    /* ── Megamenú "Todas las herramientas" ─────────────── */
+    .mega-trigger {
+      position: relative;
+      display: flex;
+      align-items: center;
+      height: 100%;
+    }
+
+    .mega-btn {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      height: 100%;
+      padding: 0 var(--space-3);
+      font-size: var(--font-sm);
+      font-weight: 500;
+      color: rgba(255,255,255,0.65);
+      background: none;
+      border: none;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -3px;
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
+      transition: color 0.15s;
+    }
+
+    .mega-btn:hover,
+    .mega-trigger:hover .mega-btn,
+    .mega-trigger.open .mega-btn {
+      color: #ffffff;
+    }
+
+    .mega-trigger.open .mega-btn,
+    .mega-trigger:focus-within .mega-btn {
+      border-bottom-color: var(--color-accent);
+    }
+
+    .mega-chevron {
+      width: 12px;
+      height: 12px;
+      transition: transform 0.2s;
+      flex-shrink: 0;
+    }
+
+    .mega-trigger.open .mega-chevron,
+    .mega-trigger:hover .mega-chevron {
+      transform: rotate(180deg);
+    }
+
+    /* Panel del megamenú */
+    .mega-panel {
+      display: none;
+      position: absolute;
+      top: calc(100% + 3px); /* justo debajo del border-bottom del header */
+      left: 0;
+      min-width: 580px;
+      background: var(--color-white);
+      border: 1px solid var(--color-gray-200);
+      border-top: 3px solid var(--color-accent);
+      border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+      padding: var(--space-4);
+      z-index: 200;
+    }
+
+    .mega-trigger:hover .mega-panel,
+    .mega-trigger.open .mega-panel,
+    .mega-trigger:focus-within .mega-panel {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-4);
+    }
+
+    .mega-col-title {
+      font-size: var(--font-xs);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--color-gray-500);
+      margin-bottom: var(--space-2);
+      padding-bottom: var(--space-1);
+      border-bottom: 1px solid var(--color-gray-200);
+    }
+
+    .mega-items { display: flex; flex-direction: column; gap: 2px; }
+
+    .mega-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-1) var(--space-2);
+      border-radius: var(--radius-md);
+      text-decoration: none;
+      color: var(--color-gray-700);
+      font-size: var(--font-sm);
+      transition: background 0.12s, color 0.12s;
+    }
+
+    .mega-item:hover {
+      background: var(--color-primary-light);
+      color: var(--color-primary);
+      text-decoration: none;
+    }
+
+    .mega-item.active {
+      background: var(--color-primary-light);
+      color: var(--color-primary);
+      font-weight: 500;
+    }
+
+    .mega-item-icon {
+      font-size: 0.9rem;
+      flex-shrink: 0;
+      width: 18px;
+      text-align: center;
+    }
+
+    /* ── Derecha del header ────────────────────────────── */
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+
     .btn-auth {
       font-size: var(--font-sm);
       font-weight: 500;
       padding: var(--space-1) var(--space-3);
       background: transparent;
-      border: 1px solid var(--color-gray-700);
-      color: var(--color-gray-500);
+      border: 1px solid rgba(255,255,255,0.25);
+      color: rgba(255,255,255,0.65);
       border-radius: var(--radius-md);
       cursor: pointer;
       transition: all 0.2s;
@@ -219,7 +373,9 @@ const tools = [
 
     .btn-auth:hover { border-color: #ffffff; color: #ffffff; background: transparent; }
 
-    /* ── DRAWER DE HERRAMIENTAS ────────────────────────── */
+    /* ════════════════════════════════════════════════════
+       DRAWER MOBILE
+    ════════════════════════════════════════════════════ */
     .drawer-overlay {
       display: none;
       position: fixed;
@@ -230,11 +386,14 @@ const tools = [
 
     .drawer-overlay.open { display: block; }
 
+    /* En desktop nunca se muestra */
+    @media (min-width: 768px) {
+      .drawer-overlay { display: none !important; }
+    }
+
     .drawer {
       position: fixed;
-      top: 0;
-      left: 0;
-      bottom: 0;
+      top: 0; left: 0; bottom: 0;
       width: min(320px, 85vw);
       background: var(--color-white);
       z-index: 95;
@@ -246,6 +405,10 @@ const tools = [
     }
 
     .drawer.open { transform: translateX(0); }
+
+    @media (min-width: 768px) {
+      .drawer { display: none !important; }
+    }
 
     .drawer-header {
       display: flex;
@@ -266,85 +429,46 @@ const tools = [
     }
 
     .btn-drawer-close {
-      background: none;
-      border: none;
-      color: var(--color-gray-500);
-      font-size: 1.4rem;
-      line-height: 1;
-      cursor: pointer;
-      padding: 2px 6px;
-      border-radius: var(--radius-sm);
-      font-family: inherit;
-      transition: color 0.15s;
+      background: none; border: none; color: rgba(255,255,255,0.6);
+      font-size: 1.4rem; line-height: 1; cursor: pointer; padding: 2px 6px;
+      border-radius: var(--radius-sm); font-family: inherit; transition: color 0.15s;
     }
 
     .btn-drawer-close:hover { color: #ffffff; background: none; }
 
-    .drawer-body {
-      flex: 1;
-      overflow-y: auto;
-      padding: var(--space-2) 0;
-    }
+    .drawer-body { flex: 1; overflow-y: auto; padding: var(--space-2) 0; }
 
     .drawer-section-title {
-      font-size: var(--font-xs);
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.12em;
-      color: var(--color-gray-500);
+      font-size: var(--font-xs); font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.12em; color: var(--color-gray-500);
       padding: var(--space-3) var(--space-4) var(--space-1);
     }
 
     .drawer-link {
-      display: flex;
-      align-items: center;
-      gap: var(--space-3);
-      padding: var(--space-2) var(--space-4);
-      text-decoration: none;
-      color: var(--color-gray-700);
-      font-size: var(--font-sm);
+      display: flex; align-items: center; gap: var(--space-3);
+      padding: var(--space-2) var(--space-4); text-decoration: none;
+      color: var(--color-gray-700); font-size: var(--font-sm);
       transition: background 0.15s, color 0.15s;
       border-left: 3px solid transparent;
     }
 
-    .drawer-link:hover {
-      background: var(--color-primary-light);
-      color: var(--color-primary);
-      text-decoration: none;
-    }
+    .drawer-link:hover   { background: var(--color-primary-light); color: var(--color-primary); text-decoration: none; }
+    .drawer-link.active  { background: var(--color-primary-light); color: var(--color-primary); border-left-color: var(--color-accent); font-weight: 500; }
 
-    .drawer-link.active {
-      background: var(--color-primary-light);
-      color: var(--color-primary);
-      border-left-color: var(--color-accent);
-      font-weight: 500;
-    }
-
-    .drawer-link-icon {
-      font-size: 1rem;
-      flex-shrink: 0;
-      width: 20px;
-      text-align: center;
-    }
+    .drawer-link-icon { font-size: 1rem; flex-shrink: 0; width: 20px; text-align: center; }
 
     .drawer-footer {
       border-top: 1px solid var(--color-gray-200);
       padding: var(--space-3) var(--space-4);
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-2);
-      flex-shrink: 0;
+      display: flex; flex-direction: column; gap: var(--space-2); flex-shrink: 0;
     }
 
-    .drawer-footer a {
-      font-size: var(--font-xs);
-      color: var(--color-gray-500);
-      text-decoration: none;
-    }
-
+    .drawer-footer a { font-size: var(--font-xs); color: var(--color-gray-500); text-decoration: none; }
     .drawer-footer a:hover { color: var(--color-primary); text-decoration: none; }
 
-    /* ── FOOTER ────────────────────────────────────────── */
+    /* ════════════════════════════════════════════════════
+       FOOTER
+    ════════════════════════════════════════════════════ */
     .site-footer {
       background: var(--color-primary);
       border-top: 3px solid var(--color-accent);
@@ -353,58 +477,24 @@ const tools = [
     }
 
     .footer-inner {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      flex-wrap: wrap;
-      gap: var(--space-6);
+      display: flex; align-items: flex-start; justify-content: space-between;
+      flex-wrap: wrap; gap: var(--space-6);
     }
 
-    .footer-brand-name {
-      font-size: var(--font-base);
-      font-weight: 700;
-      color: #ffffff;
-      margin-bottom: var(--space-1);
-    }
+    .footer-brand-name { font-size: var(--font-base); font-weight: 700; color: #ffffff; margin-bottom: var(--space-1); }
+    .footer-tagline    { font-size: var(--font-xs); color: var(--color-gray-500); margin-bottom: 0; }
 
-    .footer-tagline {
-      font-size: var(--font-xs);
-      color: var(--color-gray-500);
-      margin-bottom: 0;
-    }
-
-    .footer-links {
-      display: flex;
-      gap: var(--space-4);
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-
-    .footer-links a {
-      font-size: var(--font-xs);
-      color: var(--color-gray-500);
-      text-decoration: none;
-    }
-
+    .footer-links { display: flex; gap: var(--space-4); list-style: none; padding: 0; margin: 0; }
+    .footer-links a { font-size: var(--font-xs); color: var(--color-gray-500); text-decoration: none; }
     .footer-links a:hover { color: #ffffff; text-decoration: none; }
 
-    .footer-copy {
-      font-size: var(--font-xs);
-      color: var(--color-gray-700);
-      margin-bottom: 0;
-      margin-top: var(--space-4);
-    }
+    .footer-copy { font-size: var(--font-xs); color: var(--color-gray-700); margin-bottom: 0; margin-top: var(--space-4); }
 
-    /* ── @media print ──────────────────────────────────── */
+    /* ════════════════════════════════════════════════════
+       @media print
+    ════════════════════════════════════════════════════ */
     @media print {
-      .site-header,
-      .drawer,
-      .drawer-overlay,
-      .site-footer {
-        display: none !important;
-      }
-
+      .site-header, .drawer, .drawer-overlay, .site-footer { display: none !important; }
       body { background: #ffffff !important; min-height: unset; }
       main { flex: none; }
     }
@@ -412,33 +502,85 @@ const tools = [
 </head>
 <body>
 
-  <!-- ── HEADER ──────────────────────────────────────────── -->
+  <!-- ════════════════════════════════════════════════════
+       HEADER
+  ════════════════════════════════════════════════════ -->
   <header class="site-header">
     <div class="container">
       <div class="header-inner">
 
-        <!-- Izquierda: hamburguesa + marca + tool badge -->
-        <div class="header-left">
-          <button class="btn-menu" id="btnMenu" type="button" aria-label="Menú de herramientas" aria-expanded="false" aria-controls="drawer">
-            <span></span><span></span><span></span>
-          </button>
+        <!-- Hamburguesa (solo mobile) -->
+        <button
+          class="btn-menu"
+          id="btnMenu"
+          type="button"
+          aria-label="Menú de herramientas"
+          aria-expanded="false"
+          aria-controls="drawer"
+        >
+          <span></span><span></span><span></span>
+        </button>
 
-          <a href="/" class="brand" aria-label="edetools — inicio">
-            <span class="brand-name">edetools</span>
-            <div class="brand-dot" aria-hidden="true"></div>
-          </a>
+        <!-- Marca -->
+        <a href="/" class="brand" aria-label="edetools — inicio">
+          <span class="brand-name">edetools</span>
+          <div class="brand-dot" aria-hidden="true"></div>
+        </a>
 
-          {toolPage && toolTitle && (
-            <span class="tool-name-badge" aria-label={`Herramienta activa: ${toolTitle}`}>
-              {toolTitle}
-            </span>
-          )}
-        </div>
+        <!-- Badge herramienta activa (mobile, solo en tool pages) -->
+        {toolPage && toolTitle && (
+          <span class="tool-name-badge" aria-label={`Herramienta: ${toolTitle}`}>
+            {toolTitle}
+          </span>
+        )}
 
-        <!-- Centro: nav desktop -->
-        <nav class="header-nav" aria-label="Navegación principal">
-          <a href="/" class:list={['nav-link', { active: currentPath === '/' }]}>Herramientas</a>
-          <a href="/acerca" class:list={['nav-link', { active: currentPath.startsWith('/acerca') }]}>Acerca</a>
+        <!-- Nav desktop -->
+        <nav class="desktop-nav" aria-label="Herramientas">
+
+          <!-- Links directos a herramientas clave -->
+          <div class="nav-direct">
+            {featuredNav.map(item => (
+              <a
+                href={item.href}
+                class:list={['nav-link', { active: currentPath === item.href }]}
+              >
+                {item.label}
+              </a>
+            ))}
+          </div>
+
+          <div class="nav-sep" aria-hidden="true"></div>
+
+          <!-- Megamenú "Todas las herramientas" -->
+          <div class="mega-trigger" id="megaTrigger">
+            <button class="mega-btn" type="button" aria-haspopup="true" aria-expanded="false" id="megaBtn">
+              Todas las herramientas
+              <svg class="mega-chevron" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <polyline points="2 4 6 8 10 4"/>
+              </svg>
+            </button>
+
+            <div class="mega-panel" id="megaPanel" role="menu">
+              {allTools.map(group => (
+                <div>
+                  <p class="mega-col-title">{group.section}</p>
+                  <div class="mega-items">
+                    {group.items.map(item => (
+                      <a
+                        href={item.href}
+                        class:list={['mega-item', { active: currentPath === item.href }]}
+                        role="menuitem"
+                      >
+                        <span class="mega-item-icon" aria-hidden="true">{item.icon}</span>
+                        {item.label}
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
         </nav>
 
         <!-- Derecha: auth -->
@@ -452,17 +594,19 @@ const tools = [
     </div>
   </header>
 
-  <!-- ── DRAWER ──────────────────────────────────────────── -->
+  <!-- ════════════════════════════════════════════════════
+       DRAWER MOBILE
+  ════════════════════════════════════════════════════ -->
   <div class="drawer-overlay" id="drawerOverlay" aria-hidden="true"></div>
 
   <nav class="drawer" id="drawer" aria-label="Herramientas" aria-hidden="true">
     <div class="drawer-header">
       <span class="drawer-title">Herramientas</span>
-      <button class="btn-drawer-close" id="btnDrawerClose" type="button" aria-label="Cerrar menú">&times;</button>
+      <button class="btn-drawer-close" id="btnDrawerClose" type="button" aria-label="Cerrar">&times;</button>
     </div>
 
     <div class="drawer-body">
-      {tools.map(group => (
+      {allTools.map(group => (
         <div>
           <p class="drawer-section-title">{group.section}</p>
           {group.items.map(item => (
@@ -485,12 +629,16 @@ const tools = [
     </div>
   </nav>
 
-  <!-- ── CONTENIDO ───────────────────────────────────────── -->
+  <!-- ════════════════════════════════════════════════════
+       CONTENIDO
+  ════════════════════════════════════════════════════ -->
   <main>
     <slot />
   </main>
 
-  <!-- ── FOOTER ──────────────────────────────────────────── -->
+  <!-- ════════════════════════════════════════════════════
+       FOOTER
+  ════════════════════════════════════════════════════ -->
   <footer class="site-footer">
     <div class="container">
       <div class="footer-inner">
@@ -512,7 +660,7 @@ const tools = [
   </footer>
 
   <script>
-    // ── Drawer ─────────────────────────────────────────────
+    // ── Drawer mobile ───────────────────────────────────────
     const btnMenu        = document.getElementById('btnMenu')        as HTMLButtonElement;
     const btnDrawerClose = document.getElementById('btnDrawerClose') as HTMLButtonElement;
     const drawer         = document.getElementById('drawer')         as HTMLElement;
@@ -538,13 +686,51 @@ const tools = [
       document.body.style.overflow = '';
     }
 
-    btnMenu.addEventListener('click',        () => drawer.classList.contains('open') ? closeDrawer() : openDrawer());
-    btnDrawerClose.addEventListener('click', closeDrawer);
-    drawerOverlay.addEventListener('click',  closeDrawer);
+    btnMenu?.addEventListener('click', () =>
+      drawer.classList.contains('open') ? closeDrawer() : openDrawer()
+    );
+    btnDrawerClose?.addEventListener('click', closeDrawer);
+    drawerOverlay?.addEventListener('click', closeDrawer);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDrawer(); closeMega(); } });
 
-    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+    // ── Megamenú desktop ────────────────────────────────────
+    // El megamenú se abre con hover (CSS) pero también con click
+    // para accesibilidad con teclado.
+    const megaTrigger = document.getElementById('megaTrigger') as HTMLDivElement;
+    const megaBtn     = document.getElementById('megaBtn')     as HTMLButtonElement;
 
-    // ── Auth stub ──────────────────────────────────────────
+    function openMega() {
+      megaTrigger.classList.add('open');
+      megaBtn.setAttribute('aria-expanded', 'true');
+    }
+
+    function closeMega() {
+      megaTrigger.classList.remove('open');
+      megaBtn.setAttribute('aria-expanded', 'false');
+    }
+
+    // Click toggle (complementa el hover de CSS)
+    megaBtn?.addEventListener('click', () =>
+      megaTrigger.classList.contains('open') ? closeMega() : openMega()
+    );
+
+    // Cerrar al hacer click fuera
+    document.addEventListener('click', e => {
+      if (megaTrigger && !megaTrigger.contains(e.target as Node)) closeMega();
+    });
+
+    // Cerrar al salir con mouse (redundante con CSS :hover pero
+    // cubre el caso del estado .open activado por click)
+    megaTrigger?.addEventListener('mouseleave', () => {
+      // Solo cerrar el estado JS si el panel no fue abierto por click explícito
+      // Lo dejamos abierto por CSS :hover, solo limpiamos la clase .open
+      setTimeout(() => {
+        // Si el foco ya no está dentro, cerrar
+        if (!megaTrigger.contains(document.activeElement)) closeMega();
+      }, 50);
+    });
+
+    // ── Auth stub ────────────────────────────────────────────
     document.getElementById('btn-auth')?.addEventListener('click', () => {
       console.info('[Auth] loginWithRedirect() — pendiente de configurar Auth0');
     });
