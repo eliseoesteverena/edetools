@@ -1,8 +1,9 @@
 /* Variables - Colores */
 :root {
-  --color-primary: rgb(6, 78, 59);
-  --color-primary-light: rgb(209, 250, 229);
-  --color-primary-dark: rgb(2, 44, 34);
+  --color-primary:       #7c3aed; /* violeta */
+  --color-primary-light: #f5f3ff;
+  --color-primary-dark:  #5b21b6;
+  --color-accent:        #a3e635; /* lima eléctrico */
   --color-gray-50: #f9fafb;
   --color-gray-100: #f3f4f6;
   --color-gray-200: #e5e7eb;
