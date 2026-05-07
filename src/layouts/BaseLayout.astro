@@ -88,7 +88,7 @@ const allTools = [
     .site-header {
       background: var(--color-primary);
       border-bottom: 3px solid var(--color-accent);
-      height: 52px;
+      height: 80px;
       position: sticky;
       top: 0;
       z-index: 100;
@@ -285,7 +285,8 @@ const allTools = [
       display: none;
       position: absolute;
       top: calc(100% + 3px); /* justo debajo del border-bottom del header */
-      left: 0;
+      left: 50%;
+      transform: translateX(-50%);
       min-width: 580px;
       background: var(--color-white);
       border: 1px solid var(--color-gray-200);
