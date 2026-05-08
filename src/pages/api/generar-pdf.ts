@@ -1,39 +1,37 @@
 // src/pages/api/generar-pdf.ts
-// Endpoint agnóstico de generación de PDF.
-// Recibe un PDFLayout como JSON y devuelve el PDF binario.
+// Endpoint agnóstico de generación de PDF con pdf-lib.
 //
-// Uso desde cualquier herramienta:
-//   const res = await fetch('/api/generar-pdf', {
-//     method: 'POST',
-//     headers: { 'Content-Type': 'application/json' },
-//     body: JSON.stringify(layout),   // PDFLayout
-//   });
-//   const blob = await res.blob();
+// MODELO DE EJECUCIÓN:
+//   - El cliente (fotos.astro) es responsable de entregar imágenes ya
+//     orientadas correctamente (rotadas via canvas offscreen si hace falta).
+//   - Este endpoint solo posiciona y embebe — sin transformaciones de rotación.
+//   - Coordenadas en el layout usan origen TOP-LEFT (como CSS/canvas).
+//     La conversión a bottom-left de PDF se hace aquí internamente.
 //
-// Compatible con Astro + adaptador Cloudflare Pages o Node.
+// POST /api/generar-pdf
+//   Body: PDFLayout (JSON)
+//   Response: application/pdf
 
 import type { APIRoute } from 'astro';
-import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
-// Requerido en output: 'hybrid' para que Cloudflare lo trate como SSR
 export const prerender = false;
 
-// ── Tipos públicos del layout ────────────────────────────────────────────────
-// (duplicados aquí para que el endpoint sea self-contained;
-//  podés moverlos a src/types/pdf-layout.ts y re-exportar)
+// ── Tipos ────────────────────────────────────────────────────────────────────
 
 export type PDFUnit = 'mm' | 'cm' | 'pt' | 'px';
 
 export interface PDFImageElement {
   type: 'image';
-  src: string;             // data-URL base64 (image/jpeg o image/png)
+  /** data-URL base64 — imagen YA orientada correctamente por el cliente */
+  src: string;
   x: number;
   y: number;
   width: number;
   height: number;
-  rotation?: number;       // grados, sentido horario, origen = centro
+  /** 'fill' estira al slot | 'contain' respeta aspecto con padding | 'cover' recorta */
   fit?: 'fill' | 'contain' | 'cover';
-  opacity?: number;        // 0–1, default 1
+  opacity?: number;
 }
 
 export interface PDFTextElement {
@@ -41,12 +39,13 @@ export interface PDFTextElement {
   text: string;
   x: number;
   y: number;
-  fontSize?: number;       // en pt, independiente de la unidad de la página
+  /** Siempre en pt, independiente de la unidad de la página */
+  fontSize?: number;
   font?: 'helvetica' | 'helvetica-bold' | 'courier' | 'times';
-  color?: [number, number, number]; // RGB 0–1
+  color?: [number, number, number];
   align?: 'left' | 'center' | 'right';
-  maxWidth?: number;       // word-wrap (en la unidad de la página)
-  lineHeight?: number;     // multiplicador, default 1.2
+  maxWidth?: number;
+  lineHeight?: number;
   opacity?: number;
 }
 
@@ -60,7 +59,6 @@ export interface PDFRectElement {
   fillOpacity?: number;
   stroke?: [number, number, number];
   strokeWidth?: number;
-  borderRadius?: number;
   opacity?: number;
 }
 
@@ -72,7 +70,7 @@ export interface PDFLineElement {
   y2: number;
   stroke?: [number, number, number];
   strokeWidth?: number;
-  dashArray?: number[];    // e.g. [4, 2] → guiones de 4, espacios de 2
+  dashArray?: number[];
   opacity?: number;
 }
 
@@ -85,23 +83,23 @@ export type PDFElement =
 export interface PDFPageLayout {
   width: number;
   height: number;
-  unit?: PDFUnit;          // sobreescribe la unidad global
+  unit?: PDFUnit;
   elements: PDFElement[];
 }
 
 export interface PDFLayout {
-  filename?: string;       // default: 'documento.pdf'
-  unit: PDFUnit;           // unidad global para todas las páginas
+  filename?: string;
+  unit: PDFUnit;
   pages: PDFPageLayout[];
 }
 
-// ── Conversión de unidades → puntos (pt) ────────────────────────────────────
+// ── Conversión de unidades ───────────────────────────────────────────────────
 
 const TO_PT: Record<PDFUnit, number> = {
   pt: 1,
-  mm: 2.8346456692913,   // 1 mm = 72/25.4 pt
-  cm: 28.346456692913,   // 1 cm = 72/2.54 pt
-  px: 0.75,              // 1 px = 0.75 pt  (asume 96 dpi)
+  mm: 72 / 25.4,
+  cm: 72 / 2.54,
+  px: 72 / 96,
 };
 
 function toPt(value: number, unit: PDFUnit): number {
@@ -111,181 +109,171 @@ function toPt(value: number, unit: PDFUnit): number {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function parseDataUrl(dataUrl: string): { bytes: Uint8Array; mime: string } {
-  const [header, b64] = dataUrl.split(',');
-  const mime = header.match(/:(.*?);/)?.[1] ?? 'image/jpeg';
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const commaIdx = dataUrl.indexOf(',');
+  if (commaIdx === -1) throw new Error('data-URL sin coma separadora');
+  const header = dataUrl.slice(0, commaIdx);
+  const b64    = dataUrl.slice(commaIdx + 1);
+  const mime   = header.match(/:(.*?);/)?.[1] ?? 'image/jpeg';
+  // Decodificación compatible con Cloudflare Workers (no hay Buffer)
+  const binStr = atob(b64);
+  const bytes  = new Uint8Array(binStr.length);
+  for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
   return { bytes, mime };
 }
 
-function toRgb(c?: [number, number, number]) {
-  return c ? rgb(c[0], c[1], c[2]) : undefined;
-}
+// Caché de fonts por documento para no re-embedarlos en cada texto
+const fontCache = new WeakMap<PDFDocument, Map<string, Awaited<ReturnType<PDFDocument['embedFont']>>>>();
 
-function resolveFont(doc: PDFDocument, name?: string) {
-  const map: Record<string, string> = {
+async function getFont(doc: PDFDocument, name?: string) {
+  const key = name ?? 'helvetica';
+  if (!fontCache.has(doc)) fontCache.set(doc, new Map());
+  const cache = fontCache.get(doc)!;
+  if (cache.has(key)) return cache.get(key)!;
+  const stdMap: Record<string, (typeof StandardFonts)[keyof typeof StandardFonts]> = {
     'helvetica':      StandardFonts.Helvetica,
     'helvetica-bold': StandardFonts.HelveticaBold,
     'courier':        StandardFonts.Courier,
     'times':          StandardFonts.TimesRoman,
   };
-  return doc.embedFont(map[name ?? 'helvetica'] ?? StandardFonts.Helvetica);
+  const font = await doc.embedFont(stdMap[key] ?? StandardFonts.Helvetica);
+  cache.set(key, font);
+  return font;
 }
 
-// ── Dibujado de elementos ────────────────────────────────────────────────────
+// ── Dibujado ─────────────────────────────────────────────────────────────────
 
 async function drawImage(
   page: ReturnType<PDFDocument['addPage']>,
   el: PDFImageElement,
   unit: PDFUnit,
-  pageHeightPt: number,
+  pageHPt: number,
   doc: PDFDocument,
 ) {
   const { bytes, mime } = parseDataUrl(el.src);
-  let pdfImage;
+
+  let pdfImg;
   try {
-    pdfImage = mime === 'image/png'
-      ? await doc.embedPng(bytes)
-      : await doc.embedJpg(bytes);
-  } catch {
-    // Si la imagen falla, dibujamos un rect gris como fallback
+    // Intentar JPEG primero; si falla, intentar PNG
+    if (mime === 'image/png') {
+      pdfImg = await doc.embedPng(bytes);
+    } else {
+      try {
+        pdfImg = await doc.embedJpg(bytes);
+      } catch {
+        // Algunos JPEG con metadatos inusuales fallan embedJpg → intentar como PNG
+        pdfImg = await doc.embedPng(bytes);
+      }
+    }
+  } catch (e) {
+    // Fallback visual: rect gris con borde para indicar el slot
+    const xPt = toPt(el.x, unit);
+    const yPt = pageHPt - toPt(el.y, unit) - toPt(el.height, unit);
     page.drawRectangle({
-      x:      toPt(el.x, unit),
-      y:      pageHeightPt - toPt(el.y + el.height, unit),
-      width:  toPt(el.width, unit),
-      height: toPt(el.height, unit),
-      color:  rgb(0.8, 0.8, 0.8),
+      x: xPt, y: yPt,
+      width: toPt(el.width, unit), height: toPt(el.height, unit),
+      color: rgb(0.85, 0.85, 0.85),
+      borderColor: rgb(0.6, 0.6, 0.6), borderWidth: 0.5,
     });
+    console.error('[generar-pdf] embed falló:', (e as Error).message);
     return;
   }
 
-  const xPt = toPt(el.x, unit);
-  const yTopPt = toPt(el.y, unit);
-  const wPt = toPt(el.width, unit);
-  const hPt = toPt(el.height, unit);
-
-  // PDF origin = bottom-left, layout origin = top-left
-  const yPt = pageHeightPt - yTopPt - hPt;
+  // Slot en pt (origen top-left del layout → bottom-left de PDF)
+  const slotX = toPt(el.x, unit);
+  const slotW = toPt(el.width, unit);
+  const slotH = toPt(el.height, unit);
+  const slotY = pageHPt - toPt(el.y, unit) - slotH; // PDF: y crece hacia arriba
 
   const fit = el.fit ?? 'fill';
-  let drawW = wPt;
-  let drawH = hPt;
-  let drawX = xPt;
-  let drawY = yPt;
 
-  if (fit !== 'fill') {
-    const imgAspect = pdfImage.width / pdfImage.height;
-    const slotAspect = wPt / hPt;
-    if (fit === 'contain') {
-      if (imgAspect > slotAspect) {
-        drawW = wPt;
-        drawH = wPt / imgAspect;
-        drawY = yPt + (hPt - drawH) / 2;
-      } else {
-        drawH = hPt;
-        drawW = hPt * imgAspect;
-        drawX = xPt + (wPt - drawW) / 2;
-      }
-    } else if (fit === 'cover') {
-      // clip to slot area
-      if (imgAspect > slotAspect) {
-        drawH = hPt;
-        drawW = hPt * imgAspect;
-        drawX = xPt - (drawW - wPt) / 2;
-      } else {
-        drawW = wPt;
-        drawH = wPt / imgAspect;
-        drawY = yPt - (drawH - hPt) / 2;
-      }
+  let drawX = slotX;
+  let drawY = slotY;
+  let drawW = slotW;
+  let drawH = slotH;
+
+  if (fit === 'contain') {
+    const imgAspect  = pdfImg.width / pdfImg.height;
+    const slotAspect = slotW / slotH;
+    if (imgAspect > slotAspect) {
+      // imagen más ancha → ajustar por ancho
+      drawW = slotW;
+      drawH = slotW / imgAspect;
+      drawX = slotX;
+      drawY = slotY + (slotH - drawH) / 2;
+    } else {
+      // imagen más alta → ajustar por alto
+      drawH = slotH;
+      drawW = slotH * imgAspect;
+      drawX = slotX + (slotW - drawW) / 2;
+      drawY = slotY;
+    }
+  } else if (fit === 'cover') {
+    // cover sin clipping: centramos y dejamos que sobresalga
+    // (pdf-lib no tiene clip paths simples; el cliente debería enviar fit=fill)
+    const imgAspect  = pdfImg.width / pdfImg.height;
+    const slotAspect = slotW / slotH;
+    if (imgAspect > slotAspect) {
+      drawH = slotH;
+      drawW = slotH * imgAspect;
+      drawX = slotX - (drawW - slotW) / 2;
+      drawY = slotY;
+    } else {
+      drawW = slotW;
+      drawH = slotW / imgAspect;
+      drawX = slotX;
+      drawY = slotY - (drawH - slotH) / 2;
     }
   }
+  // fit === 'fill': drawX/Y/W/H ya apuntan al slot completo
 
-  const rotation = el.rotation ?? 0;
-
-  if (rotation !== 0) {
-    // Rotate around center of slot
-    const cx = xPt + wPt / 2;
-    const cy = yPt + hPt / 2;
-    page.drawImage(pdfImage, {
-      x:        cx - drawH / 2,
-      y:        cy - drawW / 2,
-      width:    drawH,
-      height:   drawW,
-      rotate:   degrees(rotation),
-      opacity:  el.opacity ?? 1,
-    });
-  } else {
-    page.drawImage(pdfImage, {
-      x:       drawX,
-      y:       drawY,
-      width:   drawW,
-      height:  drawH,
-      opacity: el.opacity ?? 1,
-    });
-  }
+  page.drawImage(pdfImg, {
+    x: drawX, y: drawY,
+    width: drawW, height: drawH,
+    opacity: el.opacity ?? 1,
+  });
 }
 
 async function drawText(
   page: ReturnType<PDFDocument['addPage']>,
   el: PDFTextElement,
   unit: PDFUnit,
-  pageHeightPt: number,
+  pageHPt: number,
   doc: PDFDocument,
 ) {
-  const font = await resolveFont(doc, el.font);
-  const fontSize = el.fontSize ?? 12;
-  const color = toRgb(el.color) ?? rgb(0, 0, 0);
-  const opacity = el.opacity ?? 1;
-  const lineHeight = (el.lineHeight ?? 1.2) * fontSize;
-  const xPt = toPt(el.x, unit);
-  const maxWidthPt = el.maxWidth ? toPt(el.maxWidth, unit) : undefined;
+  const font       = await getFont(doc, el.font);
+  const fontSize   = el.fontSize ?? 12;
+  const color      = el.color ? rgb(...el.color) : rgb(0, 0, 0);
+  const lineHeightPt = (el.lineHeight ?? 1.2) * fontSize;
+  const xPt        = toPt(el.x, unit);
+  const maxWPt     = el.maxWidth ? toPt(el.maxWidth, unit) : undefined;
 
-  // Split text into lines (respeta \n + word-wrap si maxWidth está definido)
-  let lines: string[] = [];
-  const rawLines = el.text.split('\n');
-
-  if (maxWidthPt) {
-    for (const raw of rawLines) {
-      const words = raw.split(' ');
-      let current = '';
-      for (const word of words) {
-        const test = current ? `${current} ${word}` : word;
-        const w = font.widthOfTextAtSize(test, fontSize);
-        if (w > maxWidthPt && current) {
-          lines.push(current);
-          current = word;
-        } else {
-          current = test;
-        }
+  // Word-wrap + saltos de línea explícitos
+  const lines: string[] = [];
+  for (const raw of el.text.split('\n')) {
+    if (!maxWPt) { lines.push(raw); continue; }
+    let current = '';
+    for (const word of raw.split(' ')) {
+      const test = current ? `${current} ${word}` : word;
+      if (font.widthOfTextAtSize(test, fontSize) > maxWPt && current) {
+        lines.push(current);
+        current = word;
+      } else {
+        current = test;
       }
-      if (current) lines.push(current);
     }
-  } else {
-    lines = rawLines;
+    if (current) lines.push(current);
   }
 
   lines.forEach((line, i) => {
-    const lineW = font.widthOfTextAtSize(line, fontSize);
     let drawX = xPt;
-    if (el.align === 'center' && maxWidthPt) {
-      drawX = xPt + (maxWidthPt - lineW) / 2;
-    } else if (el.align === 'right' && maxWidthPt) {
-      drawX = xPt + maxWidthPt - lineW;
+    if (maxWPt) {
+      const lw = font.widthOfTextAtSize(line, fontSize);
+      if      (el.align === 'center') drawX = xPt + (maxWPt - lw) / 2;
+      else if (el.align === 'right')  drawX = xPt + maxWPt - lw;
     }
-
-    // y: top-left origin → convert (text baseline in PDF = bottom of line)
-    const yTopPt = toPt(el.y, unit) + i * lineHeight;
-    const yPt = pageHeightPt - yTopPt - fontSize;
-
-    page.drawText(line, {
-      x: drawX,
-      y: yPt,
-      size: fontSize,
-      font,
-      color,
-      opacity,
-    });
+    // Baseline en PDF: pageH - y_top - fontSize (línea 0 = top del bloque)
+    const yPt = pageHPt - toPt(el.y, unit) - fontSize - i * lineHeightPt;
+    page.drawText(line, { x: drawX, y: yPt, size: fontSize, font, color, opacity: el.opacity ?? 1 });
   });
 }
 
@@ -293,19 +281,17 @@ function drawRect(
   page: ReturnType<PDFDocument['addPage']>,
   el: PDFRectElement,
   unit: PDFUnit,
-  pageHeightPt: number,
+  pageHPt: number,
 ) {
-  const xPt = toPt(el.x, unit);
-  const wPt = toPt(el.width, unit);
+  const wPt = toPt(el.width,  unit);
   const hPt = toPt(el.height, unit);
-  const yPt = pageHeightPt - toPt(el.y, unit) - hPt;
+  const xPt = toPt(el.x, unit);
+  const yPt = pageHPt - toPt(el.y, unit) - hPt;
 
   page.drawRectangle({
-    x: xPt, y: yPt,
-    width: wPt, height: hPt,
-    ...(el.fill       ? { color:       rgb(...el.fill),       opacity: el.fillOpacity ?? el.opacity ?? 1 } : {}),
-    ...(el.stroke     ? { borderColor: rgb(...el.stroke),     borderWidth: el.strokeWidth ?? 0.5 } : {}),
-    ...(el.borderRadius ? { borderLineCap: 'Round' as any } : {}),
+    x: xPt, y: yPt, width: wPt, height: hPt,
+    ...(el.fill   ? { color:       rgb(...el.fill),   opacity:     el.fillOpacity ?? el.opacity ?? 1 } : {}),
+    ...(el.stroke ? { borderColor: rgb(...el.stroke), borderWidth: el.strokeWidth ?? 0.5 } : {}),
   });
 }
 
@@ -313,35 +299,30 @@ function drawLine(
   page: ReturnType<PDFDocument['addPage']>,
   el: PDFLineElement,
   unit: PDFUnit,
-  pageHeightPt: number,
+  pageHPt: number,
 ) {
-  const x1Pt = toPt(el.x1, unit);
-  const y1Pt = pageHeightPt - toPt(el.y1, unit);
-  const x2Pt = toPt(el.x2, unit);
-  const y2Pt = pageHeightPt - toPt(el.y2, unit);
-
   page.drawLine({
-    start: { x: x1Pt, y: y1Pt },
-    end:   { x: x2Pt, y: y2Pt },
-    color: el.stroke ? rgb(...el.stroke) : rgb(0, 0, 0),
+    start: { x: toPt(el.x1, unit), y: pageHPt - toPt(el.y1, unit) },
+    end:   { x: toPt(el.x2, unit), y: pageHPt - toPt(el.y2, unit) },
+    color:     el.stroke ? rgb(...el.stroke) : rgb(0, 0, 0),
     thickness: el.strokeWidth ?? 0.5,
     dashArray: el.dashArray,
     opacity:   el.opacity ?? 1,
   });
 }
 
-// ── Handler principal ────────────────────────────────────────────────────────
+// ── Handler ──────────────────────────────────────────────────────────────────
 
 export const POST: APIRoute = async ({ request }) => {
   let layout: PDFLayout;
   try {
-    layout = await request.json();
+    layout = await request.json() as PDFLayout;
   } catch {
-    return error(400, 'JSON inválido en el body.');
+    return jsonError(400, 'JSON inválido en el body.');
   }
 
-  if (!layout.pages?.length) {
-    return error(400, 'El layout debe incluir al menos una página.');
+  if (!Array.isArray(layout.pages) || layout.pages.length === 0) {
+    return jsonError(400, 'El layout debe incluir al menos una página.');
   }
 
   const globalUnit: PDFUnit = layout.unit ?? 'mm';
@@ -349,53 +330,52 @@ export const POST: APIRoute = async ({ request }) => {
   try {
     const doc = await PDFDocument.create();
     doc.setTitle(layout.filename?.replace(/\.pdf$/i, '') ?? 'Documento');
-    doc.setProducer('Herramientas — generar-pdf endpoint');
+    doc.setProducer('edetools / generar-pdf');
 
     for (const pageLayout of layout.pages) {
-      const unit: PDFUnit = pageLayout.unit ?? globalUnit;
-      const pageWidthPt   = toPt(pageLayout.width,  unit);
-      const pageHeightPt  = toPt(pageLayout.height, unit);
-      const page          = doc.addPage([pageWidthPt, pageHeightPt]);
+      const unit     = (pageLayout.unit ?? globalUnit) as PDFUnit;
+      const pageWPt  = toPt(pageLayout.width,  unit);
+      const pageHPt  = toPt(pageLayout.height, unit);
+      const page     = doc.addPage([pageWPt, pageHPt]);
 
       for (const el of pageLayout.elements ?? []) {
         try {
           switch (el.type) {
-            case 'image': await drawImage(page, el, unit, pageHeightPt, doc); break;
-            case 'text':  await drawText (page, el, unit, pageHeightPt, doc); break;
-            case 'rect':  drawRect(page, el, unit, pageHeightPt);              break;
-            case 'line':  drawLine(page, el, unit, pageHeightPt);              break;
+            case 'image': await drawImage(page, el, unit, pageHPt, doc); break;
+            case 'text':  await drawText (page, el, unit, pageHPt, doc); break;
+            case 'rect':  drawRect(page, el, unit, pageHPt);              break;
+            case 'line':  drawLine(page, el, unit, pageHPt);              break;
           }
         } catch (elemErr) {
-          // Elemento falla en silencio — el resto de la página continúa
-          console.error(`[generar-pdf] error en elemento ${el.type}:`, elemErr);
+          console.error(`[generar-pdf] elemento ${el.type} falló:`, elemErr);
+          // Continúa con el resto de la página
         }
       }
     }
 
     const pdfBytes = await doc.save();
-    const filename  = layout.filename ?? 'documento.pdf';
 
     return new Response(pdfBytes, {
       status: 200,
       headers: {
-        ...corsHeaders(),
+        ...cors(),
         'Content-Type':        'application/pdf',
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': `attachment; filename="${layout.filename ?? 'documento.pdf'}"`,
         'Content-Length':      String(pdfBytes.byteLength),
       },
     });
 
-  } catch (err: any) {
-    console.error('[generar-pdf] error generando PDF:', err);
-    return error(500, 'Error interno generando el PDF: ' + err.message);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[generar-pdf] error fatal:', msg);
+    return jsonError(500, 'Error generando el PDF: ' + msg);
   }
 };
 
-// OPTIONS handler para CORS pre-flight
 export const OPTIONS: APIRoute = () =>
-  new Response(null, { status: 204, headers: corsHeaders() });
+  new Response(null, { status: 204, headers: cors() });
 
-function corsHeaders() {
+function cors() {
   return {
     'Access-Control-Allow-Origin':  '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -403,9 +383,9 @@ function corsHeaders() {
   };
 }
 
-function error(status: number, message: string) {
+function jsonError(status: number, message: string) {
   return new Response(JSON.stringify({ error: message }), {
     status,
-    headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+    headers: { ...cors(), 'Content-Type': 'application/json' },
   });
 }

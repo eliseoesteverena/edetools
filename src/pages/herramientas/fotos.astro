@@ -283,8 +283,9 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   const previewHint       = document.getElementById('previewHint');
 
   let files = [];
-  let analyzedImages = [];
+  let analyzedImages = [];  // { element: HTMLImageElement, isHorizontal, isSquare }
 
+  // ── Helpers ───────────────────────────────────────────
   function matchPreset(presets, w, h, tol = 0.05) {
     for (const [key, val] of Object.entries(presets))
       if (Math.abs(val.w - w) < tol && Math.abs(val.h - h) < tol) return key;
@@ -300,35 +301,52 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     return { sw, sh, margin, printW: sw - margin * 2, printH: sh - margin * 2, pw, ph };
   }
 
+  // Devuelve el objeto optimal con .isVerticalSlot indicando que slot.h >= slot.w
   function calculateOrientation(cfg) {
-    const v = { w: Math.min(cfg.pw, cfg.ph), h: Math.max(cfg.pw, cfg.ph) };
-    v.cols = Math.floor(cfg.printW / v.w); v.rows = Math.floor(cfg.printH / v.h);
+    const v = { w: Math.min(cfg.pw, cfg.ph), h: Math.max(cfg.pw, cfg.ph), isVerticalSlot: true };
+    v.cols = Math.floor(cfg.printW / v.w);
+    v.rows = Math.floor(cfg.printH / v.h);
     v.capacity = v.cols * v.rows;
-    const h = { w: Math.max(cfg.pw, cfg.ph), h: Math.min(cfg.pw, cfg.ph) };
-    h.cols = Math.floor(cfg.printW / h.w); h.rows = Math.floor(cfg.printH / h.h);
-    h.capacity = h.cols * h.rows;
-    return v.capacity >= h.capacity ? v : h;
+
+    const hz = { w: Math.max(cfg.pw, cfg.ph), h: Math.min(cfg.pw, cfg.ph), isVerticalSlot: false };
+    hz.cols = Math.floor(cfg.printW / hz.w);
+    hz.rows = Math.floor(cfg.printH / hz.h);
+    hz.capacity = hz.cols * hz.rows;
+
+    return v.capacity >= hz.capacity ? v : hz;
   }
 
   function validate() {
     const cfg = getConfig();
     const errors = [], warnings = [];
-    if (cfg.sw <= 0 || cfg.sh <= 0)         errors.push('El tamaño de hoja debe ser mayor a 0.');
-    if (cfg.printW <= 0 || cfg.printH <= 0) errors.push('Los márgenes exceden el tamaño de hoja.');
-    if (cfg.pw <= 0 || cfg.ph <= 0)         errors.push('El tamaño de foto debe ser mayor a 0.');
-    if (files.length === 0)                 errors.push('Seleccioná al menos una fotografía.');
+    if (cfg.sw <= 0 || cfg.sh <= 0)         errors.push('El tamano de hoja debe ser mayor a 0.');
+    if (cfg.printW <= 0 || cfg.printH <= 0) errors.push('Los margenes exceden el tamano de hoja.');
+    if (cfg.pw <= 0 || cfg.ph <= 0)         errors.push('El tamano de foto debe ser mayor a 0.');
+    if (files.length === 0)                 errors.push('Selecciona al menos una fotografia.');
+
     let optimal = null, cols = 0, rows = 0, perPage = 0;
     if (errors.length === 0) {
-      optimal = calculateOrientation(cfg); ({ cols, rows } = optimal); perPage = optimal.capacity;
-      if (optimal.w > cfg.printW || optimal.h > cfg.printH) errors.push('La foto no cabe en el área de impresión.');
-      if (cols === 0 || rows === 0) errors.push('No cabe ninguna foto en el área de impresión.');
+      optimal = calculateOrientation(cfg);
+      ({ cols, rows } = optimal);
+      perPage = optimal.capacity;
+      if (optimal.w > cfg.printW || optimal.h > cfg.printH)
+        errors.push('La foto no cabe en el area de impresion.');
+      if (cols === 0 || rows === 0)
+        errors.push('No cabe ninguna foto en el area de impresion.');
       if (errors.length === 0) {
-        const wp = cfg.printW - cols * optimal.w, hp = cfg.printH - rows * optimal.h;
+        const wp = cfg.printW - cols * optimal.w;
+        const hp = cfg.printH - rows * optimal.h;
         const wasted = ((wp * cfg.printH + hp * cfg.printW - wp * hp) / (cfg.printW * cfg.printH)) * 100;
-        if (wasted > 30) warnings.push(`Se desperdicia ${wasted.toFixed(1)}% del área de impresión.`);
+        if (wasted > 30) warnings.push('Se desperdicia ' + wasted.toFixed(1) + '% del area de impresion.');
       }
     }
     return { valid: errors.length === 0, errors, warnings, cfg, cols, rows, perPage, optimal };
+  }
+
+  // Una imagen necesita rotar si su orientacion no coincide con el slot
+  function imageNeedsRotation(img, optimal) {
+    if (img.isSquare) return false;
+    return optimal.isVerticalSlot ? img.isHorizontal : !img.isHorizontal;
   }
 
   // ── Preview canvas ────────────────────────────────────
@@ -339,28 +357,36 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
     if (errors.length > 0) {
       infoBox.className = 'info-box is-error'; infoBox.hidden = false;
-      infoBox.innerHTML = `<strong>Errores</strong><br>${errors.join('<br>')}`;
+      infoBox.innerHTML = '<strong>Errores</strong><br>' + errors.join('<br>');
     } else {
       const tp = Math.ceil(files.length / perPage);
       infoBox.className = warnings.length ? 'info-box is-warning' : 'info-box'; infoBox.hidden = false;
-      infoBox.innerHTML = `<strong>Configuración válida</strong><br>
-        Hoja: ${cfg.sw} × ${cfg.sh} cm &nbsp;|&nbsp; Área útil: ${cfg.printW.toFixed(1)} × ${cfg.printH.toFixed(1)} cm<br>
-        Foto: ${cfg.pw} × ${cfg.ph} cm &nbsp;|&nbsp; ${perPage} por página (${cols} col × ${rows} fil)<br>
-        ${files.length} foto${files.length !== 1 ? 's' : ''} → ${tp} página${tp !== 1 ? 's' : ''}
-        ${warnings.length ? '<br><br><strong>Atención:</strong><br>' + warnings.join('<br>') : ''}`;
+      infoBox.innerHTML = '<strong>Configuracion valida</strong><br>' +
+        'Hoja: ' + cfg.sw + ' x ' + cfg.sh + ' cm &nbsp;|&nbsp; Area util: ' + cfg.printW.toFixed(1) + ' x ' + cfg.printH.toFixed(1) + ' cm<br>' +
+        'Foto: ' + cfg.pw + ' x ' + cfg.ph + ' cm &nbsp;|&nbsp; ' + perPage + ' por pagina (' + cols + ' col x ' + rows + ' fil)<br>' +
+        files.length + ' foto' + (files.length !== 1 ? 's' : '') + ' -> ' + tp + ' pagina' + (tp !== 1 ? 's' : '') +
+        (warnings.length ? '<br><br><strong>Atencion:</strong><br>' + warnings.join('<br>') : '');
     }
     downloadBtn.disabled = !valid;
     if (!cfg.sw || !cfg.sh) return;
 
     const aspect = cfg.sw / cfg.sh;
     let cw, ch;
-    if (aspect >= 1) { cw = MAX_W; ch = Math.round(MAX_W / aspect); if (ch > MAX_H) { ch = MAX_H; cw = Math.round(MAX_H * aspect); } }
-    else             { ch = MAX_H; cw = Math.round(MAX_H * aspect); if (cw > MAX_W) { cw = MAX_W; ch = Math.round(MAX_W / aspect); } }
-    previewSheetCard.style.width = `${cw}px`; previewSheetCard.style.height = `${ch}px`;
-    previewCanvas.style.width = `${cw}px`;    previewCanvas.style.height = `${ch}px`;
+    if (aspect >= 1) {
+      cw = MAX_W; ch = Math.round(MAX_W / aspect);
+      if (ch > MAX_H) { ch = MAX_H; cw = Math.round(MAX_H * aspect); }
+    } else {
+      ch = MAX_H; cw = Math.round(MAX_H * aspect);
+      if (cw > MAX_W) { cw = MAX_W; ch = Math.round(MAX_W / aspect); }
+    }
+    previewSheetCard.style.width  = cw + 'px';
+    previewSheetCard.style.height = ch + 'px';
+    previewCanvas.style.width     = cw + 'px';
+    previewCanvas.style.height    = ch + 'px';
 
     const dpr = window.devicePixelRatio || 1;
-    previewCanvas.width = cw * dpr; previewCanvas.height = ch * dpr;
+    previewCanvas.width  = cw * dpr;
+    previewCanvas.height = ch * dpr;
     const ctx = previewCanvas.getContext('2d');
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, cw, ch);
@@ -368,14 +394,15 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
     if (!valid || !optimal) {
       previewPlaceholder.style.display = '';
-      if (previewHint) previewHint.textContent = 'Configurá la hoja y el tamaño de foto';
+      if (previewHint) previewHint.textContent = 'Configura la hoja y el tamano de foto';
       return;
     }
     previewPlaceholder.style.display = 'none';
 
     const scale = cw / cfg.sw;
-    const mPx = cfg.margin * scale, slotW = optimal.w * scale, slotH = optimal.h * scale;
-    const optIsVertical = optimal.h > optimal.w;
+    const mPx   = cfg.margin * scale;
+    const slotW = optimal.w * scale;
+    const slotH = optimal.h * scale;
 
     ctx.strokeStyle = '#e0e4ea'; ctx.lineWidth = 0.5; ctx.setLineDash([3, 3]);
     ctx.strokeRect(mPx, mPx, cfg.printW * scale, cfg.printH * scale);
@@ -386,122 +413,206 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
       const col = i % cols, row = Math.floor(i / cols);
       const x = mPx + col * slotW, y = mPx + row * slotH;
       const img = analyzedImages[i];
-      if (img?.element) {
-        const rot = !img.isSquare && ((optIsVertical && img.isHorizontal) || (!optIsVertical && !img.isHorizontal));
-        ctx.save(); ctx.beginPath(); ctx.rect(x, y, slotW, slotH); ctx.clip();
-        if (rot) { ctx.translate(x + slotW / 2, y + slotH / 2); ctx.rotate(Math.PI / 2); ctx.drawImage(img.element, -slotH / 2, -slotW / 2, slotH, slotW); }
-        else       { ctx.drawImage(img.element, x, y, slotW, slotH); }
+
+      if (img && img.element) {
+        const rot = imageNeedsRotation(img, optimal);
+        ctx.save();
+        ctx.beginPath(); ctx.rect(x, y, slotW, slotH); ctx.clip();
+        if (rot) {
+          ctx.translate(x + slotW / 2, y + slotH / 2);
+          ctx.rotate(Math.PI / 2);
+          const imgAsp = img.element.naturalWidth / img.element.naturalHeight;
+          const sAsp   = slotH / slotW;
+          let dw, dh;
+          if (imgAsp > sAsp) { dh = slotW; dw = slotW * imgAsp; }
+          else               { dw = slotH; dh = slotH / imgAsp; }
+          ctx.drawImage(img.element, -dw / 2, -dh / 2, dw, dh);
+        } else {
+          const imgAsp = img.element.naturalWidth / img.element.naturalHeight;
+          const sAsp   = slotW / slotH;
+          let dw = slotW, dh = slotH, dx = x, dy = y;
+          if (imgAsp > sAsp) { dh = slotH; dw = slotH * imgAsp; dx = x - (dw - slotW) / 2; }
+          else               { dw = slotW; dh = slotW / imgAsp; dy = y - (dh - slotH) / 2; }
+          ctx.drawImage(img.element, dx, dy, dw, dh);
+        }
         ctx.restore();
       } else {
         ctx.fillStyle = '#f0f2f5'; ctx.fillRect(x, y, slotW - 0.5, slotH - 0.5);
         ctx.strokeStyle = '#c8cdd6'; ctx.lineWidth = 0.5; ctx.strokeRect(x, y, slotW - 0.5, slotH - 0.5);
-        ctx.fillStyle = '#b0b8c4'; ctx.font = `${Math.max(8, slotW * 0.3)}px sans-serif`;
+        ctx.fillStyle = '#b0b8c4'; ctx.font = Math.max(8, slotW * 0.3) + 'px sans-serif';
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText('🖼', x + slotW / 2, y + slotH / 2);
+        ctx.fillText('XX', x + slotW / 2, y + slotH / 2);
       }
     }
+
     if (previewHint) {
       const tp = Math.ceil((files.length || 1) / (cols * rows));
-      previewHint.textContent = `${cols * rows} por pág · ${files.length} fotos → ${tp} pág${tp !== 1 ? 's' : ''} (pág. 1)`;
+      previewHint.textContent = (cols * rows) + ' por pag. | ' + files.length + ' fotos -> ' + tp + ' pag' + (tp !== 1 ? 's' : '') + ' (pag. 1)';
     }
   }
 
+  // ── Carga de imagenes ─────────────────────────────────
   async function loadImages(newFiles) {
-    analyzedImages = await Promise.all(Array.from(newFiles).map(f => new Promise(res => {
-      const r = new FileReader();
-      r.onload = () => {
-        const img = new Image();
-        img.onload = () => res({ dataUrl: r.result, element: img, isSquare: img.naturalWidth === img.naturalHeight, isHorizontal: img.naturalWidth > img.naturalHeight });
-        img.onerror = () => res({ dataUrl: r.result, element: null, isSquare: false, isHorizontal: false });
-        img.src = r.result;
-      };
-      r.readAsDataURL(f);
-    })));
+    analyzedImages = await Promise.all(Array.from(newFiles).map(function(f) {
+      return new Promise(function(res) {
+        const r = new FileReader();
+        r.onload = function() {
+          const img = new Image();
+          img.onload  = function() { res({ element: img, isSquare: img.naturalWidth === img.naturalHeight, isHorizontal: img.naturalWidth > img.naturalHeight }); };
+          img.onerror = function() { res({ element: null, isSquare: false, isHorizontal: false }); };
+          img.src = r.result;
+        };
+        r.readAsDataURL(f);
+      });
+    }));
     updatePreview();
   }
 
-  // ── Construir PDFLayout para /api/generar-pdf ─────────
-  function buildPDFLayout(cfg, optimal, cols, rows) {
-    const optIsVertical = optimal.h > optimal.w;
-    const perPage = cols * rows;
-    const pages = [];
-    for (let p = 0; p < Math.ceil(analyzedImages.length / perPage); p++) {
-      const elements = [];
-      for (let i = p * perPage; i < Math.min((p + 1) * perPage, analyzedImages.length); i++) {
-        const img = analyzedImages[i];
-        const idx = i - p * perPage;
-        const col = idx % cols, row = Math.floor(idx / cols);
-        const needsRot = !img.isSquare && ((optIsVertical && img.isHorizontal) || (!optIsVertical && !img.isHorizontal));
+  // ── Render de imagen a canvas offscreen ───────────────
+  // Rota 90deg CW si needsRot=true, luego recorta al aspecto del slot (cover).
+  // Devuelve data-URL PNG lista para pdf-lib.embedPng() en el servidor.
+  function renderImageToSlot(imgEl, slotWcm, slotHcm, needsRot) {
+    var PX_PER_CM = 150 / 2.54;   // 150 dpi
+    var cvs = document.createElement('canvas');
+    cvs.width  = Math.round(slotWcm * PX_PER_CM);
+    cvs.height = Math.round(slotHcm * PX_PER_CM);
+    var ctx = cvs.getContext('2d');
+
+    if (needsRot) {
+      // Rotar 90 CW: translate al centro, rotate, dibujar
+      ctx.translate(cvs.width / 2, cvs.height / 2);
+      ctx.rotate(Math.PI / 2);
+      // Tras rotar 90 CW: eje X apunta abajo, eje Y apunta izquierda.
+      // El espacio disponible para la imagen es cvs.height x cvs.width (invertido)
+      var availW = cvs.height, availH = cvs.width;
+      var imgAsp = imgEl.naturalWidth / imgEl.naturalHeight;
+      var sAsp   = availW / availH;
+      var dw, dh;
+      if (imgAsp > sAsp) { dh = availH; dw = availH * imgAsp; }
+      else               { dw = availW; dh = availW / imgAsp; }
+      ctx.drawImage(imgEl, -dw / 2, -dh / 2, dw, dh);
+    } else {
+      // Cover normal
+      var imgAsp2 = imgEl.naturalWidth / imgEl.naturalHeight;
+      var sAsp2   = cvs.width / cvs.height;
+      var dw2, dh2, dx = 0, dy = 0;
+      if (imgAsp2 > sAsp2) { dh2 = cvs.height; dw2 = cvs.height * imgAsp2; dx = -(dw2 - cvs.width)  / 2; }
+      else                  { dw2 = cvs.width;  dh2 = cvs.width  / imgAsp2; dy = -(dh2 - cvs.height) / 2; }
+      ctx.drawImage(imgEl, dx, dy, dw2, dh2);
+    }
+
+    return cvs.toDataURL('image/png');
+  }
+
+  // ── Construir PDFLayout ───────────────────────────────
+  // Cada imagen es pre-renderizada (rotada + recortada) en un canvas offscreen.
+  // El servidor recibe PNG ya orientados y solo los posiciona con fit='fill'.
+  async function buildPDFLayout(cfg, optimal, cols, rows) {
+    var perPage = cols * rows;
+    var pages   = [];
+
+    for (var p = 0; p < Math.ceil(analyzedImages.length / perPage); p++) {
+      var elements = [];
+      for (var i = p * perPage; i < Math.min((p + 1) * perPage, analyzedImages.length); i++) {
+        var img     = analyzedImages[i];
+        var idx     = i - p * perPage;
+        var col     = idx % cols;
+        var row     = Math.floor(idx / cols);
+        var needsRot = imageNeedsRotation(img, optimal);
+        var src;
+
+        if (img.element) {
+          src = renderImageToSlot(img.element, optimal.w, optimal.h, needsRot);
+        } else {
+          // 1x1 gris como fallback para que el servidor dibuje el rect placeholder
+          src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQAABjE+ibYAAAAASUVORK5CYII=';
+        }
+
         elements.push({
-          type: 'image',
-          src:    img.dataUrl,
+          type:   'image',
+          src:    src,
           x:      cfg.margin + col * optimal.w,
           y:      cfg.margin + row * optimal.h,
           width:  optimal.w,
           height: optimal.h,
-          rotation: needsRot ? 90 : 0,
-          fit: 'fill',
+          fit:    'fill',
         });
       }
-      pages.push({ width: cfg.sw, height: cfg.sh, unit: 'cm', elements });
+      pages.push({ width: cfg.sw, height: cfg.sh, unit: 'cm', elements: elements });
     }
-    return { filename: 'fotos.pdf', unit: 'cm', pages };
+
+    return { filename: 'fotos.pdf', unit: 'cm', pages: pages };
   }
 
   // ── Descargar PDF ─────────────────────────────────────
-  downloadBtn.addEventListener('click', async () => {
-    const { valid, cfg, cols, rows, optimal } = validate();
-    if (!valid) return;
-    downloadBtn.disabled = true; downloadBtn.textContent = 'Generando PDF…';
+  downloadBtn.addEventListener('click', async function() {
+    var result = validate();
+    if (!result.valid) return;
+    var cfg = result.cfg, cols = result.cols, rows = result.rows, optimal = result.optimal;
+
+    downloadBtn.disabled    = true;
+    downloadBtn.textContent = 'Preparando imagenes...';
     try {
-      const res = await fetch('/api/generar-pdf', {
-        method: 'POST',
+      var layout = await buildPDFLayout(cfg, optimal, cols, rows);
+      downloadBtn.textContent = 'Generando PDF...';
+
+      var res = await fetch('/api/generar-pdf', {
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildPDFLayout(cfg, optimal, cols, rows)),
+        body:    JSON.stringify(layout),
       });
-      if (!res.ok) { const e = await res.json().catch(() => ({ error: res.statusText })); throw new Error(e.error); }
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a'); a.href = url; a.download = 'fotos.pdf';
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      if (!res.ok) {
+        var e = await res.json().catch(function() { return { error: res.statusText }; });
+        throw new Error(e.error || res.statusText);
+      }
+      var blob = await res.blob();
+      var url  = URL.createObjectURL(blob);
+      var a    = document.createElement('a');
+      a.href = url; a.download = 'fotos.pdf';
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (err) {
+    } catch(err) {
       alert('Error generando el PDF: ' + err.message);
     } finally {
-      downloadBtn.disabled = false; downloadBtn.textContent = 'Descargar PDF';
+      downloadBtn.disabled    = false;
+      downloadBtn.textContent = 'Descargar PDF';
     }
   });
 
   // ── Listeners ─────────────────────────────────────────
-  sheetSelect.addEventListener('change', () => {
-    const p = sheetPresets[sheetSelect.value]; if (!p) return;
+  sheetSelect.addEventListener('change', function() {
+    var p = sheetPresets[sheetSelect.value]; if (!p) return;
     sheetW.value = String(p.w); sheetH.value = String(p.h);
     sheetModBadge.classList.remove('visible'); updatePreview();
   });
-  [sheetW, sheetH].forEach(el => el.addEventListener('input', () => {
-    const m = matchPreset(sheetPresets, parseFloat(sheetW.value), parseFloat(sheetH.value));
+  [sheetW, sheetH].forEach(function(el) { el.addEventListener('input', function() {
+    var m = matchPreset(sheetPresets, parseFloat(sheetW.value), parseFloat(sheetH.value));
     if (m) sheetSelect.value = m;
     sheetModBadge.classList.toggle('visible', !m); updatePreview();
-  }));
-  sizeSelect.addEventListener('change', () => {
-    const p = photoPresets[sizeSelect.value];
+  }); });
+  sizeSelect.addEventListener('change', function() {
+    var p = photoPresets[sizeSelect.value];
     photoW.value = p ? String(p.w) : ''; photoH.value = p ? String(p.h) : '';
     photoModBadge.classList.remove('visible'); updatePreview();
   });
-  [photoW, photoH].forEach(el => el.addEventListener('input', () => {
-    const w = parseFloat(photoW.value), h = parseFloat(photoH.value);
-    const m = (w && h) ? matchPreset(photoPresets, w, h) : null;
-    sizeSelect.value = m ?? ''; photoModBadge.classList.toggle('visible', !!(w && h && !m)); updatePreview();
-  }));
+  [photoW, photoH].forEach(function(el) { el.addEventListener('input', function() {
+    var w = parseFloat(photoW.value), h = parseFloat(photoH.value);
+    var m = (w && h) ? matchPreset(photoPresets, w, h) : null;
+    sizeSelect.value = m || '';
+    photoModBadge.classList.toggle('visible', !!(w && h && !m)); updatePreview();
+  }); });
   marginSelect.addEventListener('change', updatePreview);
 
   async function handleFiles(newFiles) {
     files = Array.from(newFiles);
-    if (files.length) { if (typeof window.toolReady === 'function') window.toolReady(); await loadImages(files); }
-    else { analyzedImages = []; updatePreview(); }
+    if (files.length) {
+      if (typeof window.toolReady === 'function') window.toolReady();
+      await loadImages(files);
+    } else { analyzedImages = []; updatePreview(); }
   }
-  fileInput.addEventListener('change', e => handleFiles(e.target.files));
-  if (fileInputMore) fileInputMore.addEventListener('change', e => handleFiles(e.target.files));
+  fileInput.addEventListener('change',   function(e) { handleFiles(e.target.files); });
+  if (fileInputMore) fileInputMore.addEventListener('change', function(e) { handleFiles(e.target.files); });
 
   updatePreview();
 })();
