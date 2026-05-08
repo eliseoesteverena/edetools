@@ -13,7 +13,10 @@
 // Compatible con Astro + adaptador Cloudflare Pages o Node.
 
 import type { APIRoute } from 'astro';
-import { PDFDocument, rgb, degrees, StandardFonts, BlendMode } from 'pdf-lib';
+import { PDFDocument, rgb, degrees, StandardFonts } from 'pdf-lib';
+
+// Requerido en output: 'hybrid' para que Cloudflare lo trate como SSR
+export const prerender = false;
 
 // ── Tipos públicos del layout ────────────────────────────────────────────────
 // (duplicados aquí para que el endpoint sea self-contained;
@@ -330,14 +333,6 @@ function drawLine(
 // ── Handler principal ────────────────────────────────────────────────────────
 
 export const POST: APIRoute = async ({ request }) => {
-  // CORS pre-flight (por si se llama cross-origin en dev)
-  if (request.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: corsHeaders(),
-    });
-  }
-
   let layout: PDFLayout;
   try {
     layout = await request.json();
