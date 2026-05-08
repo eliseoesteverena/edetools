@@ -468,80 +468,131 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     updatePreview();
   }
 
-  // ── Render de imagen a canvas offscreen ───────────────
-  // Rota 90deg CW si needsRot=true, luego recorta al aspecto del slot (cover).
-  // Devuelve data-URL PNG lista para pdf-lib.embedPng() en el servidor.
-  function renderImageToSlot(imgEl, slotWcm, slotHcm, needsRot) {
-    var PX_PER_CM = 150 / 2.54;   // 150 dpi
+  // ── Constantes de conversión ─────────────────────────
+  var CM_TO_PT  = 72 / 2.54;   // 1 cm = ~28.35 pt
+  var PX_PER_CM = 150 / 2.54;  // resolución de render: 150 dpi
+
+  // ── Canvas offscreen: rota + recorta (cover) al slot ──
+  // Devuelve Uint8Array PNG via canvas.toBlob → arrayBuffer.
+  // Síncrono en apariencia porque toDataURL es síncrono;
+  // se usa toBlob (async) para no saturar la memoria con strings base64 grandes.
+  function renderSlotToBlob(imgEl, slotWcm, slotHcm, needsRot) {
+    var cw = Math.round(slotWcm * PX_PER_CM);
+    var ch = Math.round(slotHcm * PX_PER_CM);
     var cvs = document.createElement('canvas');
-    cvs.width  = Math.round(slotWcm * PX_PER_CM);
-    cvs.height = Math.round(slotHcm * PX_PER_CM);
+    cvs.width = cw; cvs.height = ch;
     var ctx = cvs.getContext('2d');
 
     if (needsRot) {
-      // Rotar 90 CW: translate al centro, rotate, dibujar
-      ctx.translate(cvs.width / 2, cvs.height / 2);
+      // Rotar 90° CW alrededor del centro del canvas
+      ctx.translate(cw / 2, ch / 2);
       ctx.rotate(Math.PI / 2);
-      // Tras rotar 90 CW: eje X apunta abajo, eje Y apunta izquierda.
-      // El espacio disponible para la imagen es cvs.height x cvs.width (invertido)
-      var availW = cvs.height, availH = cvs.width;
-      var imgAsp = imgEl.naturalWidth / imgEl.naturalHeight;
-      var sAsp   = availW / availH;
-      var dw, dh;
-      if (imgAsp > sAsp) { dh = availH; dw = availH * imgAsp; }
-      else               { dw = availW; dh = availW / imgAsp; }
+      // Tras rotar: el espacio útil es ch×cw (ejes intercambiados)
+      var aW = ch, aH = cw;
+      var asp = imgEl.naturalWidth / imgEl.naturalHeight;
+      var sAsp = aW / aH;
+      var dw = asp > sAsp ? aH * asp : aW;
+      var dh = asp > sAsp ? aH       : aW / asp;
       ctx.drawImage(imgEl, -dw / 2, -dh / 2, dw, dh);
     } else {
-      // Cover normal
-      var imgAsp2 = imgEl.naturalWidth / imgEl.naturalHeight;
-      var sAsp2   = cvs.width / cvs.height;
+      var asp2 = imgEl.naturalWidth / imgEl.naturalHeight;
+      var sAsp2 = cw / ch;
       var dw2, dh2, dx = 0, dy = 0;
-      if (imgAsp2 > sAsp2) { dh2 = cvs.height; dw2 = cvs.height * imgAsp2; dx = -(dw2 - cvs.width)  / 2; }
-      else                  { dw2 = cvs.width;  dh2 = cvs.width  / imgAsp2; dy = -(dh2 - cvs.height) / 2; }
+      if (asp2 > sAsp2) { dh2 = ch; dw2 = ch * asp2; dx = -(dw2 - cw) / 2; }
+      else              { dw2 = cw; dh2 = cw / asp2; dy = -(dh2 - ch) / 2; }
       ctx.drawImage(imgEl, dx, dy, dw2, dh2);
     }
 
-    return cvs.toDataURL('image/png');
+    // toBlob es async y más eficiente en memoria que toDataURL para imágenes grandes
+    return new Promise(function(resolve, reject) {
+      cvs.toBlob(function(blob) {
+        if (!blob) { reject(new Error('canvas.toBlob falló')); return; }
+        blob.arrayBuffer().then(function(buf) {
+          resolve(new Uint8Array(buf));
+        }).catch(reject);
+      }, 'image/png');
+    });
   }
 
-  // ── Construir PDFLayout ───────────────────────────────
-  // Cada imagen es pre-renderizada (rotada + recortada) en un canvas offscreen.
-  // El servidor recibe PNG ya orientados y solo los posiciona con fit='fill'.
-  async function buildPDFLayout(cfg, optimal, cols, rows) {
-    var perPage = cols * rows;
-    var pages   = [];
+  // ── Generación de PDF 100% client-side con pdf-lib ────
+  // pdf-lib se carga desde CDN (esm.sh) la primera vez que se necesita.
+  // No hay fetch al servidor — todo ocurre en el browser del usuario.
+  var _pdfLib = null;
+  async function getPdfLib() {
+    if (_pdfLib) return _pdfLib;
+    // esm.sh sirve el módulo ESM de pdf-lib compatible con browsers modernos
+    var mod = await import('https://esm.sh/pdf-lib@1.17.1?bundle');
+    _pdfLib = mod;
+    return mod;
+  }
 
-    for (var p = 0; p < Math.ceil(analyzedImages.length / perPage); p++) {
-      var elements = [];
-      for (var i = p * perPage; i < Math.min((p + 1) * perPage, analyzedImages.length); i++) {
-        var img     = analyzedImages[i];
-        var idx     = i - p * perPage;
-        var col     = idx % cols;
-        var row     = Math.floor(idx / cols);
-        var needsRot = imageNeedsRotation(img, optimal);
-        var src;
+  async function generarPDF(cfg, optimal, cols, rows) {
+    var { PDFDocument, rgb } = await getPdfLib();
 
-        if (img.element) {
-          src = renderImageToSlot(img.element, optimal.w, optimal.h, needsRot);
-        } else {
-          // 1x1 gris como fallback para que el servidor dibuje el rect placeholder
-          src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQAABjE+ibYAAAAASUVORK5CYII=';
+    var perPage  = cols * rows;
+    var total    = analyzedImages.length;
+    var numPages = Math.ceil(total / perPage);
+
+    var pageWpt = cfg.sw * CM_TO_PT;
+    var pageHpt = cfg.sh * CM_TO_PT;
+    var slotWpt = optimal.w * CM_TO_PT;
+    var slotHpt = optimal.h * CM_TO_PT;
+    var marginPt = cfg.margin * CM_TO_PT;
+
+    var doc = await PDFDocument.create();
+    doc.setTitle('Fotos');
+    doc.setProducer('edetools / fotos client-side');
+
+    for (var p = 0; p < numPages; p++) {
+      var page = doc.addPage([pageWpt, pageHpt]);
+
+      for (var i = p * perPage; i < Math.min((p + 1) * perPage, total); i++) {
+        var img  = analyzedImages[i];
+        var idx  = i - p * perPage;
+        var col  = idx % cols;
+        var row  = Math.floor(idx / cols);
+
+        // Posición en pt (origen top-left → convertir a bottom-left de PDF)
+        var xPt  = marginPt + col * slotWpt;
+        var yPt  = pageHpt - marginPt - (row + 1) * slotHpt;  // PDF: y sube
+
+        if (!img.element) {
+          // Placeholder gris si la imagen no cargó
+          page.drawRectangle({
+            x: xPt, y: yPt, width: slotWpt, height: slotHpt,
+            color: rgb(0.85, 0.85, 0.85),
+            borderColor: rgb(0.6, 0.6, 0.6), borderWidth: 0.5,
+          });
+          continue;
         }
 
-        elements.push({
-          type:   'image',
-          src:    src,
-          x:      cfg.margin + col * optimal.w,
-          y:      cfg.margin + row * optimal.h,
-          width:  optimal.w,
-          height: optimal.h,
-          fit:    'fill',
-        });
+        var needsRot = imageNeedsRotation(img, optimal);
+
+        // Renderizar slot en canvas offscreen (rota + recorta a cover)
+        var pngBytes;
+        try {
+          pngBytes = await renderSlotToBlob(img.element, optimal.w, optimal.h, needsRot);
+        } catch(e) {
+          console.warn('[fotos] renderSlotToBlob falló:', e);
+          page.drawRectangle({ x: xPt, y: yPt, width: slotWpt, height: slotHpt, color: rgb(0.85, 0.85, 0.85) });
+          continue;
+        }
+
+        // Embeber PNG en el PDF (sin rotación — la imagen ya está orientada)
+        var pdfImg;
+        try {
+          pdfImg = await doc.embedPng(pngBytes);
+        } catch(e) {
+          console.warn('[fotos] embedPng falló:', e);
+          page.drawRectangle({ x: xPt, y: yPt, width: slotWpt, height: slotHpt, color: rgb(0.85, 0.85, 0.85) });
+          continue;
+        }
+
+        page.drawImage(pdfImg, { x: xPt, y: yPt, width: slotWpt, height: slotHpt });
       }
-      pages.push({ width: cfg.sw, height: cfg.sh, unit: 'cm', elements: elements });
     }
 
-    return { filename: 'fotos.pdf', unit: 'cm', pages: pages };
+    return doc.save();  // Uint8Array
   }
 
   // ── Descargar PDF ─────────────────────────────────────
@@ -551,21 +602,10 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     var cfg = result.cfg, cols = result.cols, rows = result.rows, optimal = result.optimal;
 
     downloadBtn.disabled    = true;
-    downloadBtn.textContent = 'Preparando imagenes...';
+    downloadBtn.textContent = 'Generando PDF…';
     try {
-      var layout = await buildPDFLayout(cfg, optimal, cols, rows);
-      downloadBtn.textContent = 'Generando PDF...';
-
-      var res = await fetch('/api/generar-pdf', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(layout),
-      });
-      if (!res.ok) {
-        var e = await res.json().catch(function() { return { error: res.statusText }; });
-        throw new Error(e.error || res.statusText);
-      }
-      var blob = await res.blob();
+      var pdfBytes = await generarPDF(cfg, optimal, cols, rows);
+      var blob = new Blob([pdfBytes], { type: 'application/pdf' });
       var url  = URL.createObjectURL(blob);
       var a    = document.createElement('a');
       a.href = url; a.download = 'fotos.pdf';
@@ -573,6 +613,7 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
     } catch(err) {
+      console.error('[fotos] generarPDF:', err);
       alert('Error generando el PDF: ' + err.message);
     } finally {
       downloadBtn.disabled    = false;
