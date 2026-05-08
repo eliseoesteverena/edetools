@@ -38,6 +38,11 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
       <p class="sizes-label">Tamaños detectados</p>
       <div class="sizes-list" id="sizesList"></div>
     </div>
+    <!-- Miniaturas de PDFs -->
+    <div class="thumbnails-section" id="thumbnailsSection" hidden>
+      <p class="section-label">Vista previa</p>
+      <div class="thumbnails-grid" id="thumbnailsGrid"></div>
+    </div>
     <div class="results" id="results"></div>
   </div>
 
@@ -103,7 +108,7 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   .drop-hint  { font-size: var(--font-xs); color: var(--color-gray-500); margin-bottom: 0; }
 
   /* ── Main area ───────────────────────────────────── */
-  .cp-main { display: flex; flex-direction: column; gap: var(--space-3); }
+  .cp-main { display: flex; flex-direction: column; gap: var(--space-4); }
 
   /* ── Sidebar ─────────────────────────────────────── */
   .cp-sidebar { display: flex; flex-direction: column; gap: var(--space-4); }
@@ -144,6 +149,7 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     flex: 1; min-width: 80px;
     background: var(--color-white); border: 1px solid var(--color-gray-200);
     border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); text-align: center;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
   }
 
   .total-card .t-label { font-size: var(--font-xs); color: var(--color-gray-500); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: var(--space-1); }
@@ -153,8 +159,15 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   .total-card.warning .t-value { color: #92400e; }
 
   /* ── Tamaños ─────────────────────────────────────── */
-  .sizes-panel { background: var(--color-gray-50); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); }
-  .sizes-label { font-size: var(--font-xs); font-weight: 600; color: var(--color-gray-500); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: var(--space-2); }
+  .sizes-panel {
+    background: var(--color-gray-50); border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--color-gray-200);
+  }
+  .sizes-label, .section-label {
+    font-size: var(--font-xs); font-weight: 600; color: var(--color-gray-500);
+    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: var(--space-2);
+  }
   .sizes-list { display: flex; flex-wrap: wrap; gap: var(--space-1); }
 
   .size-badge { display: inline-flex; align-items: center; gap: 4px; font-size: var(--font-xs); font-weight: 600; padding: 0.15rem 0.5rem; border-radius: 2rem; white-space: nowrap; }
@@ -166,6 +179,94 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   .sz-letter { background: #fce4ec; color: #880e4f; }
   .sz-other  { background: #f3e5f5; color: #6a1b9a; }
 
+  /* ── Thumbnails ──────────────────────────────────── */
+  .thumbnails-section {
+    background: var(--color-white);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4);
+  }
+
+  .thumbnails-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: var(--space-3);
+    margin-top: var(--space-2);
+  }
+
+  .thumb-card {
+    display: flex; flex-direction: column;
+    background: var(--color-gray-50);
+    border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    transition: box-shadow 0.2s, border-color 0.2s;
+    cursor: default;
+  }
+
+  .thumb-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    border-color: var(--color-primary);
+  }
+
+  .thumb-canvas-wrap {
+    position: relative;
+    background: #fff;
+    display: flex; align-items: center; justify-content: center;
+    height: 160px;
+    overflow: hidden;
+    border-bottom: 1px solid var(--color-gray-200);
+  }
+
+  .thumb-canvas-wrap canvas {
+    max-width: 100%; max-height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+
+  .thumb-loading {
+    font-size: var(--font-xs); color: var(--color-gray-500);
+    display: flex; align-items: center; justify-content: center;
+    height: 160px; width: 100%;
+  }
+
+  .thumb-info {
+    padding: var(--space-2) var(--space-2);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+
+  .thumb-name {
+    font-size: var(--font-xs); font-weight: 500;
+    color: var(--color-gray-900);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    line-height: 1.3;
+  }
+
+  .thumb-meta {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: var(--space-1);
+    margin-top: 2px;
+  }
+
+  .thumb-pages {
+    font-size: var(--font-xs); font-weight: 700;
+    color: var(--color-primary);
+    white-space: nowrap;
+  }
+
+  .thumb-size-pill {
+    font-size: 0.6rem; font-weight: 600;
+    padding: 1px 5px; border-radius: 1rem;
+    white-space: nowrap;
+  }
+
+  .thumb-error {
+    display: flex; align-items: center; justify-content: center;
+    height: 160px; font-size: 1.5rem;
+    background: #fdecea;
+    border-bottom: 1px solid #f5c6cb;
+  }
+
   /* ── Results ─────────────────────────────────────── */
   .results { display: flex; flex-direction: column; gap: var(--space-2); }
 
@@ -173,7 +274,11 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
     padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
     background: var(--color-white); border: 1px solid var(--color-gray-200);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    transition: box-shadow 0.15s;
   }
+
+  .result-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
 
   .result-item.is-error { background: #fdecea; border-color: #f5c6cb; }
   .result-info { flex: 1; min-width: 0; }
@@ -193,20 +298,24 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
   // ── Referencias ──────────────────────────────────────
-  const dropZone   = document.getElementById('dropZone')   as HTMLDivElement;
-  const fileInput  = document.getElementById('fileInput')  as HTMLInputElement;
-  const totalsEl   = document.getElementById('totals')     as HTMLDivElement;
-  const sizesPanel = document.getElementById('sizesPanel') as HTMLDivElement;
-  const sizesList  = document.getElementById('sizesList')  as HTMLDivElement;
-  const resultsEl  = document.getElementById('results')    as HTMLDivElement;
+  const dropZone          = document.getElementById('dropZone')          as HTMLDivElement;
+  const fileInput         = document.getElementById('fileInput')         as HTMLInputElement;
+  const totalsEl          = document.getElementById('totals')            as HTMLDivElement;
+  const sizesPanel        = document.getElementById('sizesPanel')        as HTMLDivElement;
+  const sizesList         = document.getElementById('sizesList')         as HTMLDivElement;
+  const resultsEl         = document.getElementById('results')           as HTMLDivElement;
+  const thumbnailsSection = document.getElementById('thumbnailsSection') as HTMLDivElement;
+  const thumbnailsGrid    = document.getElementById('thumbnailsGrid')    as HTMLDivElement;
 
-  type PdfEntry = { name: string; pages: number; pageSizes: Record<string, number>; error?: boolean };
+  type PdfEntry = {
+    name: string; pages: number; pageSizes: Record<string, number>;
+    error?: boolean; pdfDoc?: any;
+  };
   let pdfData: PdfEntry[] = [];
 
   // ── Drag & drop ──────────────────────────────────────
   fileInput.addEventListener('change', e => handleFiles((e.target as HTMLInputElement).files!));
 
-  // Botón "Agregar más" en el sidebar
   const fileInputMore = document.getElementById('fileInputMore') as HTMLInputElement;
   if (fileInputMore) fileInputMore.addEventListener('change', e => handleFiles((e.target as HTMLInputElement).files!));
 
@@ -258,6 +367,7 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   // ── Lectura de archivos ──────────────────────────────
   async function handleFiles(files: FileList) {
     resultsEl.innerHTML = '';
+    thumbnailsGrid.innerHTML = '';
     pdfData = [];
     const valid = Array.from(files).filter(f => f.type === 'application/pdf');
     if (!valid.length) return;
@@ -276,7 +386,7 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
           const name = classifySize(wMM, hMM);
           pageSizes[name] = (pageSizes[name] || 0) + 1;
         }
-        pdfData.push({ name: file.name, pages: pdf.numPages, pageSizes });
+        pdfData.push({ name: file.name, pages: pdf.numPages, pageSizes, pdfDoc: pdf });
       } catch {
         pdfData.push({ name: file.name, pages: 0, pageSizes: {}, error: true });
       }
@@ -285,11 +395,95 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     renderResults();
   }
 
+  // ── Render thumbnail ─────────────────────────────────
+  async function renderThumbnail(entry: PdfEntry): Promise<HTMLElement> {
+    const card = document.createElement('div');
+    card.className = 'thumb-card';
+
+    const canvasWrap = document.createElement('div');
+    canvasWrap.className = 'thumb-canvas-wrap';
+
+    if (entry.error || !entry.pdfDoc) {
+      const errDiv = document.createElement('div');
+      errDiv.className = 'thumb-error';
+      errDiv.textContent = '⚠️';
+      canvasWrap.appendChild(errDiv);
+    } else {
+      const loadingDiv = document.createElement('div');
+      loadingDiv.className = 'thumb-loading';
+      loadingDiv.textContent = 'Cargando…';
+      canvasWrap.appendChild(loadingDiv);
+
+      // Render first page async
+      (async () => {
+        try {
+          const page = await entry.pdfDoc.getPage(1);
+          const THUMB_H = 150;
+          const vp0 = page.getViewport({ scale: 1 });
+          const scale = THUMB_H / vp0.height;
+          const vp = page.getViewport({ scale });
+          const canvas = document.createElement('canvas');
+          canvas.width  = Math.floor(vp.width);
+          canvas.height = Math.floor(vp.height);
+          const ctx = canvas.getContext('2d')!;
+          await page.render({ canvasContext: ctx, viewport: vp }).promise;
+          canvasWrap.innerHTML = '';
+          canvasWrap.appendChild(canvas);
+        } catch {
+          canvasWrap.innerHTML = '<div class="thumb-error">⚠️</div>';
+        }
+      })();
+    }
+
+    // Info row
+    const info = document.createElement('div');
+    info.className = 'thumb-info';
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'thumb-name';
+    nameEl.title = entry.name;
+    nameEl.textContent = entry.name;
+
+    const meta = document.createElement('div');
+    meta.className = 'thumb-meta';
+
+    const pagesEl = document.createElement('span');
+    pagesEl.className = 'thumb-pages';
+    pagesEl.textContent = entry.error ? 'Error' : `${entry.pages} pág.`;
+
+    meta.appendChild(pagesEl);
+
+    if (!entry.error) {
+      // dominant size pill
+      const dominant = Object.entries(entry.pageSizes).sort((a,b) => b[1]-a[1])[0];
+      if (dominant) {
+        const pill = document.createElement('span');
+        pill.className = `thumb-size-pill size-pill ${getSizeClass(dominant[0])}`;
+        pill.textContent = dominant[0];
+        meta.appendChild(pill);
+      }
+    }
+
+    info.appendChild(nameEl);
+    info.appendChild(meta);
+    card.appendChild(canvasWrap);
+    card.appendChild(info);
+    return card;
+  }
+
   // ── Render ────────────────────────────────────────────
-  function renderResults() {
+  async function renderResults() {
     if (!pdfData.length) return;
-    // Activate working layout
     (window as any).toolReady();
+
+    // Render thumbnails
+    thumbnailsGrid.innerHTML = '';
+    thumbnailsSection.hidden = false;
+    for (const entry of pdfData) {
+      const card = await renderThumbnail(entry);
+      thumbnailsGrid.appendChild(card);
+    }
+
     calculateAndRender();
   }
 
