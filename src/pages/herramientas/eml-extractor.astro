@@ -17,20 +17,27 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
   <!-- JSZip desde CDN -->
   <script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <!-- PDF.js desde CDN (para thumbnails y conteo de páginas) -->
+  <!-- PDF.js desde CDN — thumbnails y conteo de páginas -->
   <script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
-  <div class="tool-wrap">
-
-    <!-- Drop zone -->
-    <div class="dropzone" id="dropzone">
-      <input type="file" id="fileInput" accept=".zip" />
+  <!-- ── Upload slot ──────────────────────────────────── -->
+  <div slot="upload" class="eml-upload">
+    <label class="eml-upload-zone" for="fileInput">
       <span class="drop-icon" aria-hidden="true">📁</span>
-      <p class="drop-text">
-        <strong>Seleccioná o arrastrá tu archivo .zip</strong><br />
-        con los .eml exportados
-      </p>
-      <p class="drop-filename" id="filename"></p>
+      <p class="drop-text">Seleccioná o arrastrá tu archivo .zip<br />con los .eml exportados</p>
+      <p class="drop-hint">.zip · cualquier tamaño</p>
+      <input type="file" id="fileInput" accept=".zip" />
+    </label>
+  </div>
+
+  <!-- ── Área principal (default slot → tl-main) ──────── -->
+  <div class="eml-main">
+
+    <!-- Nombre del archivo cargado -->
+    <div class="file-chip" id="fileChip" hidden>
+      <span class="file-chip-icon">📁</span>
+      <span class="file-chip-name" id="fileChipName"></span>
+      <button class="file-chip-reset" id="fileChipReset" type="button" title="Cargar otro archivo">✕</button>
     </div>
 
     <!-- Barra de progreso -->
@@ -46,7 +53,7 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
       </div>
       <div class="stat-item">
         <div class="stat-value" id="statFiles">0</div>
-        <div class="stat-label">Archivos</div>
+        <div class="stat-label">Adjuntos</div>
       </div>
       <div class="stat-item">
         <div class="stat-value" id="statErrors">0</div>
@@ -54,18 +61,19 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
       </div>
     </div>
 
-    <!-- Acciones -->
-    <div class="actions">
+    <!-- Acciones principales -->
+    <div class="actions" id="actions">
       <button class="btn-process" id="processBtn" type="button" disabled>
         Procesar
       </button>
     </div>
 
-    <!-- Log -->
+    <!-- Log de proceso -->
     <div class="log" id="log" hidden></div>
 
-    <!-- ── VISTA PREVIA DE ADJUNTOS ── -->
+    <!-- ── Vista previa de adjuntos ── -->
     <div class="preview-section" id="previewSection" hidden>
+
       <div class="preview-header">
         <div>
           <p class="preview-title">Vista previa de adjuntos</p>
@@ -81,6 +89,7 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
       <!-- Grid de miniaturas -->
       <div class="preview-grid" id="previewGrid"></div>
+
     </div>
 
   </div>
@@ -88,46 +97,44 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 </ToolLayout>
 
 <style>
-  .tool-wrap {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-    max-width: 56rem;
+  /* ── Upload ─────────────────────────────────────────── */
+  .eml-upload { width: 100%; max-width: 400px; margin: 0 auto; }
+
+  .eml-upload-zone {
+    display: flex; flex-direction: column; align-items: center; gap: var(--space-2);
+    border: 2px dashed var(--color-gray-200); border-radius: var(--radius-lg);
+    padding: var(--space-8) var(--space-6); text-align: center; cursor: pointer;
+    background: var(--color-white); transition: border-color 0.2s, background 0.2s;
+    position: relative; margin-bottom: 0;
+  }
+  .eml-upload-zone:hover { border-color: var(--color-primary); background: var(--color-primary-light); }
+  .eml-upload-zone input[type="file"] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
   }
 
-  /* ── Drop zone ─────────────────────────────────────── */
-  .dropzone {
-    position: relative;
-    border: 2px dashed var(--color-gray-200);
-    border-radius: var(--radius-lg);
-    padding: var(--space-8) var(--space-6);
-    text-align: center;
-    cursor: pointer;
-    background: var(--color-white);
-    transition: border-color 0.2s, background 0.2s;
+  .drop-icon { font-size: 2rem; }
+  .drop-text { font-size: var(--font-base); color: var(--color-gray-700); margin-bottom: 0; font-weight: 500; line-height: 1.5; }
+  .drop-hint { font-size: var(--font-xs); color: var(--color-gray-500); margin-bottom: 0; }
+
+  /* ── Main ───────────────────────────────────────────── */
+  .eml-main { display: flex; flex-direction: column; gap: var(--space-4); }
+
+  /* ── File chip ──────────────────────────────────────── */
+  .file-chip {
+    display: inline-flex; align-items: center; gap: var(--space-2);
+    background: var(--color-primary-light); border: 1px solid var(--color-primary);
+    border-radius: var(--radius-md); padding: var(--space-2) var(--space-3);
+    align-self: flex-start;
   }
-
-  .dropzone:hover,
-  .dropzone.drag-over {
-    border-color: var(--color-primary);
-    background: var(--color-primary-light);
+  .file-chip-icon { font-size: 1rem; }
+  .file-chip-name { font-size: var(--font-sm); font-weight: 500; color: var(--color-primary-dark); font-family: monospace; }
+  .file-chip-reset {
+    background: none; border: none; cursor: pointer; color: var(--color-primary);
+    font-size: 0.85rem; padding: 0 2px; line-height: 1; font-family: inherit;
   }
+  .file-chip-reset:hover { color: var(--color-primary-dark); }
 
-  .dropzone input[type="file"] {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-    cursor: pointer;
-    width: 100%;
-    height: 100%;
-    z-index: 2;
-  }
-
-  .drop-icon { font-size: 2rem; display: block; margin-bottom: var(--space-2); }
-  .drop-text { font-size: var(--font-base); color: var(--color-gray-700); line-height: 1.6; margin-bottom: var(--space-1); }
-  .drop-filename { font-size: var(--font-xs); color: var(--color-primary); font-family: monospace; margin-bottom: 0; min-height: 1.2em; }
-
-  /* ── Progress ──────────────────────────────────────── */
+  /* ── Progress ───────────────────────────────────────── */
   .progress-wrap {
     height: 4px; background: var(--color-gray-200); border-radius: 2px;
     overflow: hidden; opacity: 0; transition: opacity 0.2s;
@@ -135,19 +142,19 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   .progress-wrap.visible { opacity: 1; }
   .progress-bar { height: 100%; background: var(--color-primary); width: 0%; transition: width 0.2s; }
 
-  /* ── Stats ─────────────────────────────────────────── */
+  /* ── Stats ──────────────────────────────────────────── */
   .stats {
     display: none; gap: var(--space-6); flex-wrap: wrap;
     background: var(--color-white); border: 1px solid var(--color-gray-200);
     border-radius: var(--radius-lg); padding: var(--space-4) var(--space-6);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
   }
   .stats.visible { display: flex; }
   .stat-item { display: flex; flex-direction: column; gap: 2px; }
   .stat-value { font-size: var(--font-3xl); font-weight: 700; color: var(--color-primary); line-height: 1; }
   .stat-label { font-size: var(--font-xs); color: var(--color-gray-500); text-transform: uppercase; letter-spacing: 0.08em; }
 
-  /* ── Actions ───────────────────────────────────────── */
+  /* ── Actions ────────────────────────────────────────── */
   .actions { display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; }
 
   .btn-process {
@@ -161,20 +168,7 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   .btn-process:active:not(:disabled) { transform: scale(0.98); }
   .btn-process:disabled { background: var(--color-gray-200); color: var(--color-gray-500); cursor: not-allowed; }
 
-  .btn-download {
-    display: inline-flex; align-items: center; gap: var(--space-2);
-    padding: var(--space-2) var(--space-6);
-    background: #166534; color: #fff;
-    border: none; border-radius: var(--radius-md);
-    font-size: var(--font-base); font-weight: 500; cursor: pointer;
-    font-family: inherit; text-decoration: none;
-    transition: background 0.2s, transform 0.1s;
-    white-space: nowrap;
-  }
-  .btn-download:hover { background: #14532d; }
-  .btn-download:active { transform: scale(0.98); }
-
-  /* ── Log ───────────────────────────────────────────── */
+  /* ── Log ────────────────────────────────────────────── */
   .log {
     background: var(--color-white); border: 1px solid var(--color-gray-200);
     border-radius: var(--radius-lg); padding: var(--space-4) var(--space-6);
@@ -188,28 +182,34 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   .log-line.is-error   .log-msg { color: var(--color-accent, #dc2626); }
   .log-line.is-info    .log-msg { color: var(--color-gray-500); }
 
-  /* ── Preview section ───────────────────────────────── */
+  /* ── Preview section ────────────────────────────────── */
   .preview-section {
-    background: var(--color-white);
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-lg);
-    padding: var(--space-4);
+    background: var(--color-white); border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-lg); padding: var(--space-4);
     display: flex; flex-direction: column; gap: var(--space-3);
   }
-
   .preview-header {
     display: flex; align-items: flex-start; justify-content: space-between;
     gap: var(--space-4); flex-wrap: wrap;
   }
-
   .preview-title {
-    font-size: var(--font-sm); font-weight: 600; color: var(--color-gray-900);
-    text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px;
+    font-size: var(--font-xs); font-weight: 600; color: var(--color-gray-500);
+    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 2px;
   }
-
   .preview-subtitle { font-size: var(--font-xs); color: var(--color-gray-500); margin-bottom: 0; }
 
-  /* ── Filter bar ────────────────────────────────────── */
+  .btn-download {
+    display: inline-flex; align-items: center; gap: var(--space-2);
+    padding: var(--space-2) var(--space-5);
+    background: #166534; color: #fff;
+    border: none; border-radius: var(--radius-md);
+    font-size: var(--font-sm); font-weight: 500; cursor: pointer;
+    font-family: inherit; transition: background 0.2s, transform 0.1s; white-space: nowrap;
+  }
+  .btn-download:hover { background: #14532d; }
+  .btn-download:active { transform: scale(0.98); }
+
+  /* ── Filter bar ─────────────────────────────────────── */
   .filter-bar { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 
   .filter-btn {
@@ -221,48 +221,38 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   }
   .filter-btn:hover { border-color: var(--color-primary); color: var(--color-primary); }
   .filter-btn.active {
-    background: var(--color-primary); border-color: var(--color-primary);
-    color: #fff;
+    background: var(--color-primary); border-color: var(--color-primary); color: #fff;
   }
 
-  /* ── Preview grid ──────────────────────────────────── */
+  /* ── Preview grid ───────────────────────────────────── */
   .preview-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
     gap: var(--space-3);
   }
 
-  /* ── Preview card ──────────────────────────────────── */
+  /* ── Preview card ───────────────────────────────────── */
   .prev-card {
     display: flex; flex-direction: column;
-    background: var(--color-gray-50);
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-md);
-    overflow: hidden;
+    background: var(--color-gray-50); border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-md); overflow: hidden;
     transition: box-shadow 0.2s, border-color 0.2s;
   }
   .prev-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.10); border-color: var(--color-primary); }
 
   .prev-thumb {
-    height: 160px;
-    display: flex; align-items: center; justify-content: center;
-    background: #fff;
-    border-bottom: 1px solid var(--color-gray-200);
+    height: 150px; display: flex; align-items: center; justify-content: center;
+    background: #fff; border-bottom: 1px solid var(--color-gray-200);
     overflow: hidden; position: relative;
   }
-
   .prev-thumb canvas,
-  .prev-thumb img {
-    max-width: 100%; max-height: 100%;
-    object-fit: contain; display: block;
-  }
+  .prev-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
 
   .prev-thumb-icon {
-    font-size: 3rem; line-height: 1;
+    font-size: 2.5rem; line-height: 1;
     display: flex; flex-direction: column; align-items: center; gap: var(--space-1);
   }
-
-  .prev-thumb-icon span { font-size: var(--font-xs); color: var(--color-gray-500); font-family: monospace; }
+  .prev-thumb-icon span { font-size: var(--font-xs); color: var(--color-gray-500); font-family: monospace; letter-spacing: 0.05em; }
 
   .prev-loading {
     font-size: var(--font-xs); color: var(--color-gray-500);
@@ -275,28 +265,19 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     background: rgba(0,0,0,0.55); color: #fff;
     font-size: 0.6rem; font-weight: 700;
     padding: 2px 6px; border-radius: 1rem;
-    backdrop-filter: blur(2px);
   }
 
-  .prev-info {
-    padding: var(--space-2);
-    display: flex; flex-direction: column; gap: 2px;
-  }
-
+  .prev-info { padding: var(--space-2); display: flex; flex-direction: column; gap: 2px; }
   .prev-name {
     font-size: var(--font-xs); font-weight: 500; color: var(--color-gray-900);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    line-height: 1.3;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.3;
   }
-
   .prev-meta {
     display: flex; align-items: center; justify-content: space-between;
     gap: var(--space-1); margin-top: 2px; flex-wrap: wrap;
   }
-
   .prev-type {
-    font-size: 0.6rem; font-weight: 600; padding: 1px 6px;
-    border-radius: 1rem; white-space: nowrap;
+    font-size: 0.6rem; font-weight: 600; padding: 1px 6px; border-radius: 1rem; white-space: nowrap;
   }
   .type-pdf   { background: #fde8e8; color: #c0392b; }
   .type-img   { background: #e8f4fd; color: #1a6fa8; }
@@ -304,73 +285,67 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   .type-excel { background: #e8fef0; color: #1a7a3e; }
   .type-other { background: var(--color-gray-100); color: var(--color-gray-500); }
 
-  .prev-pages {
-    font-size: var(--font-xs); font-weight: 700; color: var(--color-primary);
-    white-space: nowrap;
-  }
-
-  .prev-origin {
-    font-size: 0.6rem; color: var(--color-gray-500);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    margin-top: 1px;
-  }
+  .prev-pages { font-size: var(--font-xs); font-weight: 700; color: var(--color-primary); white-space: nowrap; }
+  .prev-origin { font-size: 0.6rem; color: var(--color-gray-500); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
 </style>
 
 <script>
 (function () {
-  // ── PDF.js worker ───────────────────────────────────
+  // ── PDF.js worker ────────────────────────────────────
   // @ts-ignore
   pdfjsLib.GlobalWorkerOptions.workerSrc =
     'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
   // ── Referencias ──────────────────────────────────────
-  const fileInput      = document.getElementById('fileInput')      as HTMLInputElement;
-  const dropzone       = document.getElementById('dropzone')       as HTMLDivElement;
-  const filenameEl     = document.getElementById('filename')       as HTMLParagraphElement;
-  const processBtn     = document.getElementById('processBtn')     as HTMLButtonElement;
-  const downloadBtn    = document.getElementById('downloadBtn')    as HTMLButtonElement;
-  const logEl          = document.getElementById('log')            as HTMLDivElement;
-  const progressWrap   = document.getElementById('progressWrap')   as HTMLDivElement;
-  const progressBar    = document.getElementById('progressBar')    as HTMLDivElement;
-  const statsEl        = document.getElementById('stats')          as HTMLDivElement;
-  const previewSection = document.getElementById('previewSection') as HTMLDivElement;
-  const previewSubtitle= document.getElementById('previewSubtitle')as HTMLParagraphElement;
-  const filterBar      = document.getElementById('filterBar')      as HTMLDivElement;
-  const previewGrid    = document.getElementById('previewGrid')    as HTMLDivElement;
+  const fileInput      = document.getElementById('fileInput')       as HTMLInputElement;
+  const fileChip       = document.getElementById('fileChip')        as HTMLDivElement;
+  const fileChipName   = document.getElementById('fileChipName')    as HTMLSpanElement;
+  const fileChipReset  = document.getElementById('fileChipReset')   as HTMLButtonElement;
+  const processBtn     = document.getElementById('processBtn')      as HTMLButtonElement;
+  const downloadBtn    = document.getElementById('downloadBtn')     as HTMLButtonElement;
+  const logEl          = document.getElementById('log')             as HTMLDivElement;
+  const progressWrap   = document.getElementById('progressWrap')    as HTMLDivElement;
+  const progressBar    = document.getElementById('progressBar')     as HTMLDivElement;
+  const statsEl        = document.getElementById('stats')           as HTMLDivElement;
+  const previewSection = document.getElementById('previewSection')  as HTMLDivElement;
+  const previewSubtitle= document.getElementById('previewSubtitle') as HTMLParagraphElement;
+  const filterBar      = document.getElementById('filterBar')       as HTMLDivElement;
+  const previewGrid    = document.getElementById('previewGrid')     as HTMLDivElement;
 
   let selectedFile: File | null = null;
   let logLineCount = 0;
-  // Guardamos los adjuntos extraídos para la vista previa y para generar el ZIP final
   let extractedAttachments: ExtractedFile[] = [];
   let outputZipBlob: Blob | null = null;
   let activeFilter = 'all';
 
   interface ExtractedFile {
-    outName: string;
-    filename: string;
-    mimeType: string;
-    data: Uint8Array;
-    sourceEml: string;
+    outName: string; filename: string; mimeType: string;
+    data: Uint8Array; sourceEml: string;
   }
 
-  // ── Drag & drop ──────────────────────────────────────
+  // ── Selección de archivo ─────────────────────────────
   fileInput.addEventListener('change', () => {
     if (fileInput.files?.[0]) setFile(fileInput.files[0]);
   });
 
-  dropzone.addEventListener('dragover',  e => { e.preventDefault(); dropzone.classList.add('drag-over'); });
-  dropzone.addEventListener('dragleave', ()  => dropzone.classList.remove('drag-over'));
-  dropzone.addEventListener('drop', e => {
+  // Drag & drop sobre toda la zona de upload (gestionado por ToolLayout via el label)
+  // Adicionalmente soportamos drop en tl-main cuando ya está activo
+  document.addEventListener('dragover', e => e.preventDefault());
+  document.addEventListener('drop', e => {
     e.preventDefault();
-    dropzone.classList.remove('drag-over');
-    if (e.dataTransfer?.files[0]) setFile(e.dataTransfer.files[0]);
+    const f = e.dataTransfer?.files[0];
+    if (f && f.name.toLowerCase().endsWith('.zip')) setFile(f);
   });
 
   function setFile(f: File) {
     selectedFile = f;
-    filenameEl.textContent = f.name;
-    (window as any).toolReady?.();
+    // Mostrar chip con nombre del archivo
+    fileChipName.textContent = f.name;
+    fileChip.hidden = false;
+    // Activar layout working
+    if (typeof (window as any).toolReady === 'function') (window as any).toolReady();
     processBtn.disabled = false;
+    // Reset estado anterior
     previewSection.hidden = true;
     logEl.innerHTML = '';
     logEl.hidden = true;
@@ -380,6 +355,19 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     extractedAttachments = [];
     outputZipBlob = null;
   }
+
+  // Botón reset → volver a upload screen
+  fileChipReset.addEventListener('click', () => {
+    selectedFile = null;
+    fileInput.value = '';
+    fileChip.hidden = true;
+    processBtn.disabled = true;
+    previewSection.hidden = true;
+    logEl.hidden = true;
+    statsEl.className = 'stats';
+    progressWrap.className = 'progress-wrap';
+    if (typeof (window as any).toolReset === 'function') (window as any).toolReset();
+  });
 
   // ── Log helper ───────────────────────────────────────
   function log(msg: string, type: 'success' | 'error' | 'info' | '' = '') {
@@ -450,8 +438,7 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
         ab = await zipEntry.async('arraybuffer');
       } catch (e: any) {
         log(`[${prefix}] ${shortName} — error al leer: ${e.message}`, 'error');
-        totalErrors++;
-        continue;
+        totalErrors++; continue;
       }
 
       let attachments: Attachment[];
@@ -459,8 +446,7 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
         attachments = parseEML(ab);
       } catch (e: any) {
         log(`[${prefix}] ${shortName} — error al parsear: ${e.message}`, 'error');
-        totalErrors++;
-        continue;
+        totalErrors++; continue;
       }
 
       if (!attachments.length) {
@@ -481,9 +467,8 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
         usedNames.add(outName);
         outputZip.file(outName, att.data);
         extractedAttachments.push({
-          outName, filename: att.filename,
-          mimeType: att.mimeType, data: att.data,
-          sourceEml: shortName,
+          outName, filename: att.filename, mimeType: att.mimeType,
+          data: att.data, sourceEml: shortName,
         });
         log(`[${prefix}] ${shortName} → ${outName}`, 'success');
         totalFiles++;
@@ -504,11 +489,9 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
     log('Generando ZIP de salida...', 'info');
     outputZipBlob = await outputZip.generateAsync({ type: 'blob' });
-    log(`Listo. ${totalFiles} archivo(s) extraído(s). Revisá la vista previa antes de descargar.`, 'success');
+    log(`Listo. ${totalFiles} archivo(s) extraído(s).`, 'success');
 
     processBtn.disabled = false;
-
-    // Mostrar vista previa
     await renderPreview();
   }
 
@@ -516,42 +499,29 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   // Vista previa de adjuntos
   // ══════════════════════════════════════════════════════
 
-  function getMimeCategory(mime: string): 'pdf' | 'img' | 'word' | 'excel' | 'other' {
+  type MimeCat = 'pdf' | 'img' | 'word' | 'excel' | 'other';
+
+  function getMimeCat(mime: string): MimeCat {
     if (mime === 'application/pdf') return 'pdf';
     if (mime.startsWith('image/')) return 'img';
     if (mime === 'application/msword' ||
-        mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
-      return 'word';
+        mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'word';
     if (mime === 'application/vnd.ms-excel' ||
-        mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-      return 'excel';
+        mime === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') return 'excel';
     return 'other';
   }
 
-  function getMimeLabel(cat: string): string {
-    return { pdf: 'PDF', img: 'Imagen', word: 'Word', excel: 'Excel', other: 'Archivo' }[cat] || 'Archivo';
-  }
-
-  function getMimeTypeClass(cat: string): string {
-    return `type-${cat}`;
-  }
-
-  function getIconForCat(cat: string, ext: string): string {
-    if (cat === 'pdf')   return '📄';
-    if (cat === 'img')   return '🖼️';
-    if (cat === 'word')  return '📝';
-    if (cat === 'excel') return '📊';
-    return '📎';
-  }
+  const CAT_LABEL: Record<MimeCat, string> = { pdf: 'PDF', img: 'Imagen', word: 'Word', excel: 'Excel', other: 'Archivo' };
+  const CAT_ICON:  Record<MimeCat, string> = { pdf: '📄', img: '🖼️', word: '📝', excel: '📊', other: '📎' };
 
   async function renderPreview() {
     previewSection.hidden = false;
     previewSubtitle.textContent = `${extractedAttachments.length} adjunto(s) encontrado(s)`;
 
-    // Calcular categorías para filtros
+    // Contar por categoría
     const catCounts: Record<string, number> = { all: extractedAttachments.length };
     for (const att of extractedAttachments) {
-      const cat = getMimeCategory(att.mimeType);
+      const cat = getMimeCat(att.mimeType);
       catCounts[cat] = (catCounts[cat] || 0) + 1;
     }
 
@@ -568,136 +538,91 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
     for (const fd of filterDefs) {
       const btn = document.createElement('button');
-      btn.className = `filter-btn${activeFilter === fd.key ? ' active' : ''}`;
       btn.type = 'button';
+      btn.className = `filter-btn${activeFilter === fd.key ? ' active' : ''}`;
       btn.dataset.filter = fd.key;
-      const cnt = catCounts[fd.key] || 0;
-      btn.textContent = `${fd.label} (${cnt})`;
+      btn.textContent = `${fd.label} (${catCounts[fd.key] || 0})`;
       btn.addEventListener('click', () => {
         activeFilter = fd.key;
-        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        filterBar.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         applyFilter();
       });
       filterBar.appendChild(btn);
     }
 
-    // Renderizar todas las tarjetas (se ocultan con display:none al filtrar)
+    // Grid de tarjetas
     previewGrid.innerHTML = '';
     for (const att of extractedAttachments) {
-      const card = await buildPreviewCard(att);
-      previewGrid.appendChild(card);
+      previewGrid.appendChild(await buildPreviewCard(att));
     }
   }
 
   function applyFilter() {
-    const cards = previewGrid.querySelectorAll<HTMLElement>('.prev-card');
-    cards.forEach(card => {
-      const cat = card.dataset.cat || 'other';
-      card.style.display = (activeFilter === 'all' || activeFilter === cat) ? '' : 'none';
+    previewGrid.querySelectorAll<HTMLElement>('.prev-card').forEach(card => {
+      card.style.display = (activeFilter === 'all' || activeFilter === card.dataset.cat) ? '' : 'none';
     });
   }
 
   async function buildPreviewCard(att: ExtractedFile): Promise<HTMLElement> {
-    const cat = getMimeCategory(att.mimeType);
-    const ext = att.filename.split('.').pop()?.toUpperCase() || '';
+    const cat = getMimeCat(att.mimeType);
+    const ext = (att.filename.split('.').pop() || '').toUpperCase();
 
     const card = document.createElement('div');
     card.className = 'prev-card';
     card.dataset.cat = cat;
 
-    // ── Thumb ───────────────────────────────────────────
+    // ── Thumb ──────────────────────────────────────────
     const thumbDiv = document.createElement('div');
     thumbDiv.className = 'prev-thumb';
+    thumbDiv.innerHTML = `<div class="prev-loading">Cargando…</div>`;
 
     if (cat === 'pdf') {
-      const loadEl = document.createElement('div');
-      loadEl.className = 'prev-loading';
-      loadEl.textContent = 'Cargando…';
-      thumbDiv.appendChild(loadEl);
-
-      // Async render first page + page count badge
       (async () => {
         try {
           // @ts-ignore
           const pdfDoc = await pdfjsLib.getDocument(att.data).promise;
-          const page = await pdfDoc.getPage(1);
-          const THUMB_H = 148;
-          const vp0 = page.getViewport({ scale: 1 });
-          const scale = THUMB_H / vp0.height;
-          const vp = page.getViewport({ scale });
+          const page   = await pdfDoc.getPage(1);
+          const scale  = 140 / page.getViewport({ scale: 1 }).height;
+          const vp     = page.getViewport({ scale });
           const canvas = document.createElement('canvas');
           canvas.width  = Math.floor(vp.width);
           canvas.height = Math.floor(vp.height);
-          const ctx = canvas.getContext('2d')!;
-          await page.render({ canvasContext: ctx, viewport: vp }).promise;
+          await page.render({ canvasContext: canvas.getContext('2d')!, viewport: vp }).promise;
           thumbDiv.innerHTML = '';
           thumbDiv.appendChild(canvas);
-          // Badge páginas
+          // Badge con nº páginas
           const badge = document.createElement('span');
           badge.className = 'prev-badge';
           badge.textContent = `${pdfDoc.numPages} pág.`;
           thumbDiv.appendChild(badge);
-          // Actualizar prev-pages en info
-          const pagesEl = card.querySelector('.prev-pages') as HTMLElement | null;
-          if (pagesEl) pagesEl.textContent = `${pdfDoc.numPages} pág.`;
+          // Actualizar .prev-pages en info
+          const pEl = card.querySelector<HTMLElement>('.prev-pages');
+          if (pEl) pEl.textContent = `${pdfDoc.numPages} pág.`;
         } catch {
-          thumbDiv.innerHTML = `<div class="prev-thumb-icon">📄<span>${ext}</span></div>`;
+          thumbDiv.innerHTML = `<div class="prev-thumb-icon">${CAT_ICON.pdf}<span>${ext}</span></div>`;
         }
       })();
 
     } else if (cat === 'img') {
-      const loadEl = document.createElement('div');
-      loadEl.className = 'prev-loading';
-      loadEl.textContent = 'Cargando…';
-      thumbDiv.appendChild(loadEl);
-
       (async () => {
         try {
-          const blob = new Blob([att.data], { type: att.mimeType });
-          const url  = URL.createObjectURL(blob);
-          const img  = document.createElement('img');
-          img.src = url;
+          const url = URL.createObjectURL(new Blob([att.data], { type: att.mimeType }));
+          const img = new Image();
           img.alt = att.filename;
           img.onload  = () => { thumbDiv.innerHTML = ''; thumbDiv.appendChild(img); };
-          img.onerror = () => { thumbDiv.innerHTML = `<div class="prev-thumb-icon">🖼️<span>${ext}</span></div>`; };
+          img.onerror = () => { thumbDiv.innerHTML = `<div class="prev-thumb-icon">${CAT_ICON.img}<span>${ext}</span></div>`; };
+          img.src = url;
         } catch {
-          thumbDiv.innerHTML = `<div class="prev-thumb-icon">🖼️<span>${ext}</span></div>`;
+          thumbDiv.innerHTML = `<div class="prev-thumb-icon">${CAT_ICON.img}<span>${ext}</span></div>`;
         }
       })();
-
-    } else if (cat === 'word') {
-      // mammoth.js (CDN) para extraer texto y mostrar preview de texto
-      // Si no está disponible, se muestra ícono con extensión
-      (async () => {
-        try {
-          // @ts-ignore
-          if (typeof mammoth !== 'undefined') {
-            // @ts-ignore
-            const result = await mammoth.convertToHtml({ arrayBuffer: att.data.buffer });
-            const tmp = document.createElement('div');
-            tmp.innerHTML = result.value;
-            const preview = tmp.textContent?.slice(0, 200) || '';
-            const previewEl = document.createElement('div');
-            previewEl.style.cssText = 'padding:8px;font-size:0.55rem;line-height:1.4;color:#374151;overflow:hidden;height:100%;width:100%;';
-            previewEl.textContent = preview + (preview.length >= 200 ? '…' : '');
-            thumbDiv.innerHTML = '';
-            thumbDiv.appendChild(previewEl);
-          } else {
-            thumbDiv.innerHTML = `<div class="prev-thumb-icon">📝<span>${ext}</span></div>`;
-          }
-        } catch {
-          thumbDiv.innerHTML = `<div class="prev-thumb-icon">📝<span>${ext}</span></div>`;
-        }
-      })();
-      thumbDiv.innerHTML = `<div class="prev-thumb-icon">📝<span>${ext}</span></div>`;
 
     } else {
-      const icon = getIconForCat(cat, ext);
-      thumbDiv.innerHTML = `<div class="prev-thumb-icon">${icon}<span>${ext}</span></div>`;
+      thumbDiv.innerHTML = `<div class="prev-thumb-icon">${CAT_ICON[cat]}<span>${ext}</span></div>`;
     }
 
-    // ── Info ─────────────────────────────────────────────
+    // ── Info ───────────────────────────────────────────
     const info = document.createElement('div');
     info.className = 'prev-info';
 
@@ -710,13 +635,12 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     meta.className = 'prev-meta';
 
     const typeEl = document.createElement('span');
-    typeEl.className = `prev-type ${getMimeTypeClass(cat)}`;
-    typeEl.textContent = getMimeLabel(cat);
+    typeEl.className = `prev-type type-${cat}`;
+    typeEl.textContent = CAT_LABEL[cat];
 
     const pagesEl = document.createElement('span');
     pagesEl.className = 'prev-pages';
-    // Para PDF se actualiza async; para el resto queda vacío
-    pagesEl.textContent = '';
+    pagesEl.textContent = '';  // se rellena async en PDF
 
     meta.appendChild(typeEl);
     meta.appendChild(pagesEl);
@@ -741,7 +665,9 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     const a = document.createElement('a');
     a.href = URL.createObjectURL(outputZipBlob);
     a.download = 'adjuntos_extraidos.zip';
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
   });
 
   // ══════════════════════════════════════════════════════
@@ -756,12 +682,10 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
       try {
         let bytes: Uint8Array;
         if (enc.toUpperCase() === 'B') {
-          const bin = atob(text);
-          bytes = new Uint8Array(bin.length);
+          const bin = atob(text); bytes = new Uint8Array(bin.length);
           for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
         } else {
-          const s = text.replace(/_/g, ' ');
-          const arr: number[] = [];
+          const s = text.replace(/_/g, ' '); const arr: number[] = [];
           for (let i = 0; i < s.length;) {
             if (s[i] === '=' && i + 2 < s.length) { arr.push(parseInt(s.slice(i+1,i+3),16)); i+=3; }
             else { arr.push(s.charCodeAt(i)); i++; }
@@ -775,15 +699,13 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
   function parseParams(str: string): Record<string, string> {
     const params: Record<string, string> = {};
-    const cont:   Record<string, {val:string,isExt:boolean}[]> = {};
+    const cont: Record<string, {val:string,isExt:boolean}[]> = {};
     const re = /;\s*([\w\-]+)(\*\d+)?(\*)?\s*=\s*(?:"((?:[^"\\]|\\.)*)"|([^;\s]*))/g;
     let m: RegExpExecArray | null;
     while ((m = re.exec(str)) !== null) {
-      const key    = m[1].toLowerCase();
-      const seqRaw = m[2];
-      const isExt  = !!m[3];
-      const val    = m[4] !== undefined ? m[4].replace(/\\"/g, '"') : (m[5] || '');
-      const seq    = seqRaw ? parseInt(seqRaw.slice(1)) : null;
+      const key = m[1].toLowerCase(), seqRaw = m[2], isExt = !!m[3];
+      const val = m[4] !== undefined ? m[4].replace(/\\"/g, '"') : (m[5] || '');
+      const seq = seqRaw ? parseInt(seqRaw.slice(1)) : null;
       if (seq !== null) {
         if (!cont[key]) cont[key] = [];
         cont[key][seq] = { val, isExt };
@@ -791,18 +713,14 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
         const parts = val.match(/^([^']*)'([^']*)'\s*(.*)/);
         if (parts) { try { params[key] = decodeURIComponent(parts[3]); } catch(e) { params[key] = parts[3]; } }
         else params[key] = val;
-      } else {
-        params[key] = decodeRFC2047(val);
-      }
+      } else { params[key] = decodeRFC2047(val); }
     }
     for (const [key, parts] of Object.entries(cont)) {
       let combined = '';
       for (const p of parts) {
         if (!p) continue;
-        if (p.isExt) {
-          const stripped = p.val.replace(/^[^']*'[^']*'/, '');
-          try { combined += decodeURIComponent(stripped); } catch(e) { combined += stripped; }
-        } else { combined += decodeRFC2047(p.val); }
+        if (p.isExt) { const s = p.val.replace(/^[^']*'[^']*'/, ''); try { combined += decodeURIComponent(s); } catch(e) { combined += s; } }
+        else combined += decodeRFC2047(p.val);
       }
       params[key] = combined;
     }
@@ -811,19 +729,12 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
   function sanitizeFilename(name: string | null): string {
     if (!name) return 'file';
-    const dot   = name.lastIndexOf('.');
-    const base  = dot > 0 ? name.slice(0, dot) : name;
-    const ext   = dot > 0 ? name.slice(dot) : '';
-    const clean = base
-      .replace(/[^\w\s.\-]/g, '-')
-      .replace(/\s+/g, '_')
-      .replace(/-{2,}/g, '-')
-      .replace(/^[-_]+|[-_]+$/g, '');
-    return (clean || 'file') + ext;
+    const dot = name.lastIndexOf('.'), base = dot > 0 ? name.slice(0, dot) : name, ext = dot > 0 ? name.slice(dot) : '';
+    return ((base.replace(/[^\w\s.\-]/g, '-').replace(/\s+/g, '_').replace(/-{2,}/g, '-').replace(/^[-_]+|[-_]+$/g, '')) || 'file') + ext;
   }
 
   function guessFilename(mime: string): string {
-    const map: Record<string, string> = {
+    return ({
       'image/jpeg': 'image.jpg', 'image/png': 'image.png', 'image/gif': 'image.gif',
       'image/webp': 'image.webp', 'image/heic': 'image.heic',
       'application/pdf': 'file.pdf', 'application/zip': 'file.zip',
@@ -831,66 +742,46 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'file.docx',
       'application/vnd.ms-excel': 'file.xls',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'file.xlsx',
-    };
-    return map[mime] || 'file.bin';
+    } as Record<string,string>)[mime] || 'file.bin';
   }
 
   function b64ToBytes(str: string): Uint8Array {
-    const clean = str.replace(/[\r\n\s]/g, '');
-    const bin   = atob(clean);
+    const clean = str.replace(/[\r\n\s]/g, ''), bin = atob(clean);
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     return bytes;
   }
 
   function qpToBytes(str: string): Uint8Array {
-    const unfolded = str.replace(/=\r?\n/g, '');
-    const arr: number[] = [];
+    const unfolded = str.replace(/=\r?\n/g, ''); const arr: number[] = [];
     for (let i = 0; i < unfolded.length;) {
-      if (unfolded[i] === '=' && i + 2 < unfolded.length) {
-        arr.push(parseInt(unfolded.slice(i+1,i+3), 16)); i += 3;
-      } else {
-        arr.push(unfolded.charCodeAt(i)); i++;
-      }
+      if (unfolded[i] === '=' && i + 2 < unfolded.length) { arr.push(parseInt(unfolded.slice(i+1,i+3), 16)); i += 3; }
+      else { arr.push(unfolded.charCodeAt(i)); i++; }
     }
     return new Uint8Array(arr);
   }
 
   function parseEML(ab: ArrayBuffer): Attachment[] {
-    const text  = new TextDecoder('latin1').decode(new Uint8Array(ab));
-    const lines = text.split(/\r?\n/);
-    const attachments: Attachment[] = [];
+    const text = new TextDecoder('latin1').decode(new Uint8Array(ab));
+    const lines = text.split(/\r?\n/), attachments: Attachment[] = [];
     parseSection(lines, 0, lines.length, attachments, true);
     return attachments;
   }
 
-  function parseSection(
-    lines: string[], start: number, end: number,
-    attachments: Attachment[], isRoot: boolean,
-  ) {
-    let i = start;
-    const headers: Record<string, string> = {};
+  function parseSection(lines: string[], start: number, end: number, attachments: Attachment[], isRoot: boolean) {
+    let i = start; const headers: Record<string, string> = {};
     while (i < end) {
       const line = lines[i];
       if (line === '') { i++; break; }
-      if (/^[ \t]/.test(line)) {
-        const lastKey = Object.keys(headers).pop();
-        if (lastKey) headers[lastKey] += ' ' + line.trim();
-      } else {
-        const colon = line.indexOf(':');
-        if (colon > 0) {
-          headers[line.slice(0, colon).trim().toLowerCase()] = line.slice(colon + 1).trim();
-        }
-      }
+      if (/^[ \t]/.test(line)) { const lastKey = Object.keys(headers).pop(); if (lastKey) headers[lastKey] += ' ' + line.trim(); }
+      else { const colon = line.indexOf(':'); if (colon > 0) headers[line.slice(0, colon).trim().toLowerCase()] = line.slice(colon + 1).trim(); }
       i++;
     }
     const bodyStart = i;
-    const ct  = headers['content-type'] || '';
-    const cd  = headers['content-disposition'] || '';
+    const ct = headers['content-type'] || '', cd = headers['content-disposition'] || '';
     const cte = (headers['content-transfer-encoding'] || '').trim().toLowerCase();
-    const ctMain   = (ct.split(';')[0] || '').trim().toLowerCase();
-    const ctParams = parseParams(ct);
-    const cdParams = parseParams(cd);
+    const ctMain = (ct.split(';')[0] || '').trim().toLowerCase();
+    const ctParams = parseParams(ct), cdParams = parseParams(cd);
 
     if (ctMain.startsWith('multipart/')) {
       const boundary = ctParams['boundary'];
@@ -899,46 +790,32 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     }
     if (isRoot) return;
 
-    const filename =
-      cdParams['filename*'] || cdParams['filename'] ||
-      ctParams['name*']     || ctParams['name']     || null;
-
+    const filename = cdParams['filename*'] || cdParams['filename'] || ctParams['name*'] || ctParams['name'] || null;
     const isAttachment = /attachment/i.test(cd) || !!filename;
-    const isImage      = ctMain.startsWith('image/');
-    const isBinary     = ctMain.startsWith('application/');
+    const isImage = ctMain.startsWith('image/'), isBinary = ctMain.startsWith('application/');
     if (!isAttachment && !isImage && !isBinary) return;
 
     const bodyText = lines.slice(bodyStart, end).join('\n');
     let data: Uint8Array;
     try {
-      if (cte === 'base64')                data = b64ToBytes(bodyText);
+      if (cte === 'base64') data = b64ToBytes(bodyText);
       else if (cte === 'quoted-printable') data = qpToBytes(bodyText);
-      else                                 data = b64ToBytes(bodyText);
+      else data = b64ToBytes(bodyText);
     } catch(e) { data = new Uint8Array(0); }
-
     if (data.length === 0) return;
 
-    attachments.push({
-      filename: sanitizeFilename(filename || guessFilename(ctMain)),
-      mimeType: ctMain,
-      data,
-    });
+    attachments.push({ filename: sanitizeFilename(filename || guessFilename(ctMain)), mimeType: ctMain, data });
   }
 
-  function parseMultipart(
-    lines: string[], start: number, end: number,
-    boundary: string, attachments: Attachment[],
-  ) {
-    const delim    = '--' + boundary;
-    const delimEnd = '--' + boundary + '--';
+  function parseMultipart(lines: string[], start: number, end: number, boundary: string, attachments: Attachment[]) {
+    const delim = '--' + boundary, delimEnd = '--' + boundary + '--';
     const positions: { line: number; isEnd: boolean }[] = [];
     for (let i = start; i < end; i++) {
       const t = lines[i].trimEnd();
       if (t === delim || t === delimEnd) positions.push({ line: i, isEnd: t === delimEnd });
     }
     for (let d = 0; d < positions.length - 1; d++) {
-      const partStart = positions[d].line + 1;
-      const partEnd   = positions[d + 1].line;
+      const partStart = positions[d].line + 1, partEnd = positions[d + 1].line;
       if (partStart < partEnd) parseSection(lines, partStart, partEnd, attachments, false);
       if (positions[d + 1].isEnd) break;
     }
