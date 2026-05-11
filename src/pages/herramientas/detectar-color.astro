@@ -1,0 +1,505 @@
+---
+// src/pages/herramientas/detectar-color.astro
+import ToolLayout from '../../layouts/ToolLayout.astro';
+---
+
+<ToolLayout
+  title="Detectar color"
+  description="Analizá qué páginas de un PDF tienen color y cuáles son blanco y negro."
+  icon="🎨"
+  mode="upload"
+  actionLabel="Análisis"
+  tags={[
+    { label: 'pdf', type: 'pdf' },
+    { label: 'client-side', type: 'web' },
+  ]}
+>
+
+  <script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+  <!-- Canvas oculto para análisis de píxeles -->
+  <canvas id="analysisCanvas" style="display:none"></canvas>
+
+  <!-- ── Upload slot ──────────────────────────────────── -->
+  <div slot="upload" class="dc-upload">
+    <label class="dc-upload-zone" for="fileInput">
+      <span class="drop-icon" aria-hidden="true">🎨</span>
+      <p class="drop-text">Seleccioná un PDF para analizar</p>
+      <p class="drop-hint">Se detectará color página por página</p>
+      <input type="file" id="fileInput" accept="application/pdf" />
+    </label>
+  </div>
+
+  <!-- ── Área principal (default slot → tl-main) ──────── -->
+  <div class="dc-main">
+
+    <!-- Panel con fondo de grilla, igual que fotos.astro -->
+    <section class="dc-panel" aria-label="Páginas analizadas">
+
+      <div class="dc-panel-header">
+        <span class="dc-panel-title">Páginas</span>
+        <span class="dc-panel-hint" id="panelHint">El análisis aparecerá aquí</span>
+      </div>
+
+      <div class="dc-panel-area">
+        <div class="dc-grid-bg" id="pagesGrid">
+          <!-- Placeholder inicial -->
+          <div class="dc-placeholder" id="placeholder">
+            <span>🎨</span>
+            <small>Las páginas aparecerán a medida que se analicen</small>
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+
+  <!-- ── Sidebar ───────────────────────────────────────── -->
+  <div slot="sidebar" class="dc-sidebar">
+
+    <!-- Totales — se rellenan via JS -->
+    <div id="sbTotals" hidden>
+      <div class="sb-section-title">Resultado</div>
+
+      <div class="sb-stat-row">
+        <div class="sb-stat color">
+          <span class="sb-stat-icon">🌈</span>
+          <div>
+            <div class="sb-stat-value" id="sbColor">0</div>
+            <div class="sb-stat-label">Color</div>
+          </div>
+        </div>
+        <div class="sb-stat bw">
+          <span class="sb-stat-icon">⬜</span>
+          <div>
+            <div class="sb-stat-value" id="sbBw">0</div>
+            <div class="sb-stat-label">B/N</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Detalles desplegables -->
+      <details class="sb-details" id="detailsColor">
+        <summary>Páginas color</summary>
+        <div class="sb-details-body" id="detailsColorBody">—</div>
+      </details>
+
+      <details class="sb-details" id="detailsBw">
+        <summary>Páginas B/N</summary>
+        <div class="sb-details-body" id="detailsBwBody">—</div>
+      </details>
+
+      <div class="sb-divider"></div>
+    </div>
+
+    <!-- Controles -->
+    <div class="sb-section-title">Configuración</div>
+
+    <div class="sb-field">
+      <label for="toleranceInput">
+        Tolerancia de color
+        <span class="sb-field-value" id="toleranceValue">2</span>
+      </label>
+      <input
+        type="range"
+        id="toleranceInput"
+        min="1" max="30" step="1" value="2"
+      />
+      <p class="sb-field-hint">Valores bajos detectan más páginas como color. Subir si hay falsos positivos.</p>
+    </div>
+
+    <div class="sb-field">
+      <label for="scaleInput">
+        Escala de análisis
+        <span class="sb-field-value" id="scaleValue">0.3×</span>
+      </label>
+      <input
+        type="range"
+        id="scaleInput"
+        min="1" max="3" step="1" value="1"
+      />
+      <p class="sb-field-hint">Baja = más rápido. Alta = más preciso.</p>
+    </div>
+
+    <div class="sb-divider"></div>
+
+    <label class="btn-change-file" for="fileInputNew">
+      Analizar otro PDF
+      <input type="file" id="fileInputNew" accept="application/pdf" />
+    </label>
+
+  </div>
+
+</ToolLayout>
+
+<style>
+  /* ── Upload ─────────────────────────────────────────── */
+  .dc-upload { width: 100%; max-width: 400px; margin: 0 auto; }
+  .dc-upload-zone {
+    display: flex; flex-direction: column; align-items: center; gap: var(--space-2);
+    border: 2px dashed var(--color-gray-200); border-radius: var(--radius-lg);
+    padding: var(--space-8) var(--space-6); text-align: center; cursor: pointer;
+    background: var(--color-white); transition: border-color 0.2s, background 0.2s;
+    position: relative; margin-bottom: 0;
+  }
+  .dc-upload-zone:hover { border-color: var(--color-primary); background: var(--color-primary-light); }
+  .dc-upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .drop-icon { font-size: 2rem; }
+  .drop-text { font-size: var(--font-base); color: var(--color-gray-700); margin-bottom: 0; font-weight: 500; }
+  .drop-hint { font-size: var(--font-xs); color: var(--color-gray-500); margin-bottom: 0; }
+
+  /* ── Main ───────────────────────────────────────────── */
+  .dc-main { display: flex; flex-direction: column; height: 100%; }
+
+  /* ── Panel — igual estructura que fotos.astro ───────── */
+  .dc-panel {
+    flex: 1; background: var(--color-white); border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-lg); overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .dc-panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-gray-200);
+    background: var(--color-gray-50);
+  }
+  .dc-panel-title { font-size: var(--font-sm); font-weight: 600; color: var(--color-gray-700); }
+  .dc-panel-hint  { font-size: var(--font-xs); color: var(--color-gray-500); }
+
+  .dc-panel-area {
+    flex: 1; overflow: auto;
+    padding: var(--space-4); min-height: 320px;
+  }
+
+  /* Fondo de grilla — idéntico a .preview-grid-bg de fotos */
+  .dc-grid-bg {
+    min-height: 280px;
+    background-color: #f0f2f5;
+    background-image:
+      linear-gradient(to right, #d5d8de 1px, transparent 1px),
+      linear-gradient(to bottom, #d5d8de 1px, transparent 1px);
+    background-size: 20px 20px;
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    /* Grid de páginas */
+    display: flex; flex-wrap: wrap; gap: var(--space-3);
+    align-content: flex-start;
+  }
+
+  .dc-placeholder {
+    width: 100%; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: var(--space-2);
+    color: var(--color-gray-500); padding: var(--space-8) 0;
+    pointer-events: none;
+  }
+  .dc-placeholder span  { font-size: 2.5rem; opacity: 0.3; }
+  .dc-placeholder small { font-size: var(--font-xs); }
+
+  /* ── Tarjeta de página ──────────────────────────────── */
+  .page-card {
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.14), 0 1px 2px rgba(0,0,0,0.06);
+    border-radius: 3px;
+    position: relative; flex-shrink: 0;
+    overflow: hidden;
+    /* Ancho fijo; alto proporcional (A4 ≈ 1:√2) se ajusta via JS */
+    width: 80px;
+    display: flex; align-items: center; justify-content: center;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .page-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.18); }
+
+  .page-card canvas { display: block; width: 100%; height: auto; }
+
+  /* Badge COLOR / B/N */
+  .page-badge {
+    position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%);
+    font-size: 0.55rem; font-weight: 700; letter-spacing: 0.04em;
+    padding: 1px 5px; border-radius: 1rem;
+    white-space: nowrap; pointer-events: none;
+  }
+  .page-badge.is-color { background: #fde8e8; color: #c0392b; border: 1px solid #f5c6cb; }
+  .page-badge.is-bw    { background: #f0f2f5; color: #6b7280; border: 1px solid #d5d8de; }
+
+  /* Número de página */
+  .page-num {
+    position: absolute; top: 3px; left: 3px;
+    font-size: 0.5rem; font-weight: 600; color: rgba(0,0,0,0.35);
+    line-height: 1;
+  }
+
+  /* Skeleton animado mientras carga */
+  .page-card.skeleton {
+    background: #e8eaed;
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.5; }
+  }
+
+  /* ── Sidebar ────────────────────────────────────────── */
+  .dc-sidebar { display: flex; flex-direction: column; gap: var(--space-3); }
+
+  .sb-section-title {
+    font-size: var(--font-xs); font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--color-gray-500);
+  }
+  .sb-divider { height: 1px; background: var(--color-gray-200); margin: var(--space-1) 0; }
+
+  /* Stat row */
+  .sb-stat-row { display: flex; gap: var(--space-2); }
+  .sb-stat {
+    flex: 1; display: flex; align-items: center; gap: var(--space-2);
+    padding: var(--space-3); border-radius: var(--radius-md); border: 1px solid transparent;
+  }
+  .sb-stat.color { background: #fde8e8; border-color: #f5c6cb; }
+  .sb-stat.bw    { background: #f0f2f5; border-color: #d5d8de; }
+  .sb-stat-icon  { font-size: 1.25rem; line-height: 1; flex-shrink: 0; }
+  .sb-stat-value { font-size: var(--font-xl); font-weight: 700; line-height: 1; }
+  .sb-stat.color .sb-stat-value { color: #c0392b; }
+  .sb-stat.bw    .sb-stat-value { color: #374151; }
+  .sb-stat-label { font-size: var(--font-xs); color: var(--color-gray-500); text-transform: uppercase; letter-spacing: 0.08em; }
+
+  /* Details */
+  .sb-details {
+    border: 1px solid var(--color-gray-200); border-radius: var(--radius-md);
+    overflow: hidden;
+  }
+  .sb-details summary {
+    cursor: pointer; padding: var(--space-2) var(--space-3);
+    font-size: var(--font-xs); font-weight: 600; color: var(--color-gray-700);
+    background: var(--color-gray-50); list-style: none;
+    display: flex; align-items: center; justify-content: space-between;
+    user-select: none;
+  }
+  .sb-details summary::-webkit-details-marker { display: none; }
+  .sb-details summary::after {
+    content: '▸'; font-size: 0.65rem; color: var(--color-gray-400);
+    transition: transform 0.2s;
+  }
+  .sb-details[open] summary::after { transform: rotate(90deg); }
+  .sb-details-body {
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--font-xs); color: var(--color-gray-700);
+    line-height: 1.8; word-break: break-word;
+    background: var(--color-white);
+  }
+
+  /* Field con range */
+  .sb-field { display: flex; flex-direction: column; gap: 4px; }
+  .sb-field label {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: var(--font-xs); font-weight: 600; color: var(--color-gray-700); margin-bottom: 0;
+  }
+  .sb-field-value {
+    font-weight: 700; color: var(--color-primary);
+    font-size: var(--font-xs);
+  }
+  .sb-field input[type="range"] { width: 100%; cursor: pointer; accent-color: var(--color-primary); }
+  .sb-field-hint { font-size: var(--font-xs); color: var(--color-gray-500); margin-bottom: 0; line-height: 1.4; }
+
+  /* Cambiar archivo */
+  .btn-change-file {
+    display: flex; align-items: center; justify-content: center;
+    padding: var(--space-2) var(--space-3);
+    background: var(--color-white); color: var(--color-primary);
+    border: 1px dashed var(--color-primary); border-radius: var(--radius-md);
+    font-size: var(--font-sm); font-weight: 500; cursor: pointer;
+    width: 100%; position: relative; transition: background 0.15s; margin-bottom: 0;
+  }
+  .btn-change-file:hover { background: var(--color-primary-light); }
+  .btn-change-file input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+</style>
+
+<script>
+(function () {
+  // ── PDF.js worker ────────────────────────────────────
+  // @ts-ignore
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  // ── Referencias ──────────────────────────────────────
+  const fileInput       = document.getElementById('fileInput')        as HTMLInputElement;
+  const fileInputNew    = document.getElementById('fileInputNew')     as HTMLInputElement;
+  const pagesGrid       = document.getElementById('pagesGrid')        as HTMLDivElement;
+  const placeholder     = document.getElementById('placeholder')      as HTMLDivElement;
+  const panelHint       = document.getElementById('panelHint')        as HTMLSpanElement;
+  const sbTotals        = document.getElementById('sbTotals')         as HTMLDivElement;
+  const sbColor         = document.getElementById('sbColor')          as HTMLElement;
+  const sbBw            = document.getElementById('sbBw')             as HTMLElement;
+  const detailsColorBody= document.getElementById('detailsColorBody') as HTMLElement;
+  const detailsBwBody   = document.getElementById('detailsBwBody')    as HTMLElement;
+  const toleranceInput  = document.getElementById('toleranceInput')   as HTMLInputElement;
+  const toleranceValue  = document.getElementById('toleranceValue')   as HTMLSpanElement;
+  const scaleInput      = document.getElementById('scaleInput')       as HTMLInputElement;
+  const scaleValue      = document.getElementById('scaleValue')       as HTMLSpanElement;
+  const analysisCanvas  = document.getElementById('analysisCanvas')   as HTMLCanvasElement;
+  const analysisCtx     = analysisCanvas.getContext('2d', { willReadFrequently: true })!;
+
+  // Escala de render según slider (1=0.3, 2=0.6, 3=1.0)
+  const SCALE_MAP: Record<string, number> = { '1': 0.3, '2': 0.6, '3': 1.0 };
+  const SCALE_LABEL: Record<string, string> = { '1': '0.3×', '2': '0.6×', '3': '1.0×' };
+
+  // Estado
+  let analyzing = false;
+  let abortFlag = false;
+
+  // ── Controles ────────────────────────────────────────
+  toleranceInput.addEventListener('input', () => {
+    toleranceValue.textContent = toleranceInput.value;
+  });
+  scaleInput.addEventListener('input', () => {
+    scaleValue.textContent = SCALE_LABEL[scaleInput.value];
+  });
+
+  // ── Inputs de archivo ────────────────────────────────
+  fileInput.addEventListener('change', e =>
+    startAnalysis((e.target as HTMLInputElement).files?.[0])
+  );
+  fileInputNew.addEventListener('change', e =>
+    startAnalysis((e.target as HTMLInputElement).files?.[0])
+  );
+
+  // ── Detección de color ───────────────────────────────
+  function pageHasColor(imageData: ImageData, tolerance: number): boolean {
+    const d = imageData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const r = d[i], g = d[i+1], b = d[i+2];
+      if (
+        Math.abs(r - g) > tolerance ||
+        Math.abs(r - b) > tolerance ||
+        Math.abs(g - b) > tolerance
+      ) return true;
+    }
+    return false;
+  }
+
+  // ── Formatear lista de páginas → rangos compactos ────
+  // Ej: [1,2,3,5,6,9] → "1–3, 5–6, 9"
+  function toRanges(pages: number[]): string {
+    if (!pages.length) return '—';
+    const sorted = [...pages].sort((a,b) => a-b);
+    const ranges: string[] = [];
+    let start = sorted[0], end = sorted[0];
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i] === end + 1) {
+        end = sorted[i];
+      } else {
+        ranges.push(start === end ? String(start) : `${start}–${end}`);
+        start = end = sorted[i];
+      }
+    }
+    ranges.push(start === end ? String(start) : `${start}–${end}`);
+    return ranges.join(', ');
+  }
+
+  // ── Análisis principal ───────────────────────────────
+  async function startAnalysis(file: File | undefined) {
+    if (!file) return;
+
+    // Cancelar análisis anterior si estaba en curso
+    if (analyzing) { abortFlag = true; await new Promise(r => setTimeout(r, 50)); }
+    abortFlag = false;
+    analyzing = true;
+
+    // Reset UI
+    placeholder.hidden = false;
+    // Limpiar sólo las page-cards anteriores
+    pagesGrid.querySelectorAll('.page-card').forEach(c => c.remove());
+    placeholder.hidden = true;
+
+    sbTotals.hidden = true;
+    panelHint.textContent = 'Cargando PDF…';
+    if (typeof (window as any).toolReady === 'function') (window as any).toolReady();
+
+    let pdf: any;
+    try {
+      const ab = await file.arrayBuffer();
+      // @ts-ignore
+      pdf = await pdfjsLib.getDocument(new Uint8Array(ab)).promise;
+    } catch (e: any) {
+      panelHint.textContent = 'Error al abrir el PDF';
+      analyzing = false;
+      return;
+    }
+
+    const total     = pdf.numPages;
+    const tolerance = parseInt(toleranceInput.value);
+    const scale     = SCALE_MAP[scaleInput.value];
+    // Escala para render visual de la tarjeta (siempre a 80px de ancho)
+    const CARD_W    = 80;
+
+    const colorPages: number[] = [];
+    const bwPages:    number[] = [];
+
+    panelHint.textContent = `Analizando 1 / ${total}…`;
+
+    for (let i = 1; i <= total; i++) {
+      if (abortFlag) break;
+
+      panelHint.textContent = `Analizando ${i} / ${total}…`;
+
+      const page     = await pdf.getPage(i);
+      const vp0      = page.getViewport({ scale: 1 });
+
+      // ── Render visual para la tarjeta (ancho fijo 80px) ──
+      const visualScale  = CARD_W / vp0.width;
+      const visualVP     = page.getViewport({ scale: visualScale });
+      const visualCanvas = document.createElement('canvas');
+      visualCanvas.width  = Math.floor(visualVP.width);
+      visualCanvas.height = Math.floor(visualVP.height);
+      const visualCtx    = visualCanvas.getContext('2d')!;
+      await page.render({ canvasContext: visualCtx, viewport: visualVP }).promise;
+
+      // ── Render de análisis a escala baja (para getImageData) ──
+      const analyzeScale = scale;
+      const analyzeVP    = page.getViewport({ scale: analyzeScale });
+      analysisCanvas.width  = Math.floor(analyzeVP.width);
+      analysisCanvas.height = Math.floor(analyzeVP.height);
+      await page.render({ canvasContext: analysisCtx, viewport: analyzeVP }).promise;
+      const imgData = analysisCtx.getImageData(0, 0, analysisCanvas.width, analysisCanvas.height);
+
+      const isColor = pageHasColor(imgData, tolerance);
+      if (isColor) colorPages.push(i); else bwPages.push(i);
+
+      page.cleanup();
+
+      // ── Agregar tarjeta al grid ──────────────────────────
+      const card = document.createElement('div');
+      card.className = 'page-card';
+      card.style.width  = `${CARD_W}px`;
+      card.style.height = `${visualCanvas.height}px`;
+
+      const numEl = document.createElement('span');
+      numEl.className = 'page-num';
+      numEl.textContent = String(i);
+
+      const badge = document.createElement('span');
+      badge.className = `page-badge ${isColor ? 'is-color' : 'is-bw'}`;
+      badge.textContent = isColor ? 'COLOR' : 'B/N';
+
+      card.appendChild(visualCanvas);
+      card.appendChild(numEl);
+      card.appendChild(badge);
+      pagesGrid.appendChild(card);
+
+      // Pausa breve cada 8 páginas para no congelar el hilo
+      if (i % 8 === 0) await new Promise(r => setTimeout(r, 10));
+    }
+
+    if (!abortFlag) {
+      panelHint.textContent = `${total} páginas · ${colorPages.length} color · ${bwPages.length} B/N`;
+
+      // Actualizar sidebar
+      sbTotals.hidden = false;
+      sbColor.textContent = String(colorPages.length);
+      sbBw.textContent    = String(bwPages.length);
+      detailsColorBody.textContent = toRanges(colorPages);
+      detailsBwBody.textContent    = toRanges(bwPages);
+    }
+
+    analyzing = false;
+  }
+})();
+</script>

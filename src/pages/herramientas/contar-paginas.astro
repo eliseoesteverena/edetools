@@ -15,11 +15,7 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   ]}
 >
 
-  <!-- PDF.js desde CDN -->
-  <script
-    is:inline
-    src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"
-  ></script>
+  <script is:inline src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 
   <!-- ── Upload slot ──────────────────────────────────── -->
   <div slot="upload" class="cp-upload">
@@ -34,23 +30,21 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   <!-- ── Área principal (default slot → tl-main) ──────── -->
   <div class="cp-main">
 
+    <!-- Totales globales -->
     <div class="totals" id="totals"></div>
 
+    <!-- Tamaños detectados -->
     <div class="sizes-panel" id="sizesPanel" hidden>
       <p class="section-label">Tamaños detectados</p>
       <div class="sizes-list" id="sizesList"></div>
     </div>
 
-    <div class="thumbs-panel" id="thumbsPanel" hidden>
-      <p class="section-label">Vista previa</p>
-      <div class="thumbs-grid" id="thumbsGrid"></div>
-    </div>
-
+    <!-- Lista de archivos con thumbnails inline -->
     <div class="results" id="results"></div>
 
   </div>
 
-  <!-- ── Sidebar (sidebar slot → tl-sidebar) ──────────── -->
+  <!-- ── Sidebar ───────────────────────────────────────── -->
   <div slot="sidebar" class="cp-sidebar">
 
     <div class="sb-section-title">Archivos</div>
@@ -87,7 +81,6 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 <style>
   /* ── Upload ─────────────────────────────────────────── */
   .cp-upload { width: 100%; max-width: 400px; margin: 0 auto; }
-
   .cp-upload-zone {
     display: flex; flex-direction: column; align-items: center; gap: var(--space-2);
     border: 2px dashed var(--color-gray-200); border-radius: var(--radius-lg);
@@ -97,23 +90,20 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   }
   .cp-upload-zone:hover { border-color: var(--color-primary); background: var(--color-primary-light); }
   .cp-upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-
-  .drop-icon { font-size: 2rem; }
-  .drop-text { font-size: var(--font-base); color: var(--color-gray-700); margin-bottom: 0; font-weight: 500; }
-  .drop-hint { font-size: var(--font-xs); color: var(--color-gray-500); margin-bottom: 0; }
+  .drop-icon  { font-size: 2rem; }
+  .drop-text  { font-size: var(--font-base); color: var(--color-gray-700); margin-bottom: 0; font-weight: 500; }
+  .drop-hint  { font-size: var(--font-xs); color: var(--color-gray-500); margin-bottom: 0; }
 
   /* ── Main ───────────────────────────────────────────── */
   .cp-main { display: flex; flex-direction: column; gap: var(--space-4); }
 
   /* ── Sidebar ────────────────────────────────────────── */
   .cp-sidebar { display: flex; flex-direction: column; gap: var(--space-3); }
-
   .sb-section-title {
     font-size: var(--font-xs); font-weight: 600; text-transform: uppercase;
     letter-spacing: 0.1em; color: var(--color-gray-500);
   }
   .sb-divider { height: 1px; background: var(--color-gray-200); margin: var(--space-1) 0; }
-
   .btn-add-files {
     display: flex; align-items: center; justify-content: center;
     padding: var(--space-2) var(--space-3);
@@ -124,7 +114,6 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   }
   .btn-add-files:hover { background: var(--color-primary-light); }
   .btn-add-files input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-
   .cp-sidebar fieldset {
     border: 1px solid var(--color-gray-200); border-radius: var(--radius-md);
     padding: var(--space-3) var(--space-4); margin: 0;
@@ -151,89 +140,79 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     border-radius: var(--radius-md); padding: var(--space-3) var(--space-4);
   }
   .sizes-list { display: flex; flex-wrap: wrap; gap: var(--space-1); }
-
   .size-badge {
     display: inline-flex; align-items: center; gap: 4px;
     font-size: var(--font-xs); font-weight: 600;
     padding: 0.15rem 0.5rem; border-radius: 2rem; white-space: nowrap;
   }
   .size-badge .count { background: rgba(0,0,0,0.1); border-radius: 1rem; padding: 0 5px; font-weight: 400; }
-
   .sz-a3     { background: #e3f2fd; color: #1565c0; }
   .sz-a4     { background: #e8f5e9; color: #2e7d32; }
   .sz-a5     { background: #fff3e0; color: #e65100; }
   .sz-letter { background: #fce4ec; color: #880e4f; }
   .sz-other  { background: #f3e5f5; color: #6a1b9a; }
-
-  /* ── Thumbnails ─────────────────────────────────────── */
-  .thumbs-panel {
-    background: var(--color-white); border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-md); padding: var(--space-3) var(--space-4);
-  }
-  .thumbs-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: var(--space-3);
-  }
-
-  .thumb-card {
-    display: flex; flex-direction: column;
-    background: var(--color-gray-50); border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-md); overflow: hidden;
-    transition: box-shadow 0.2s, border-color 0.2s;
-  }
-  .thumb-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.10); border-color: var(--color-primary); }
-
-  .thumb-canvas-wrap {
-    height: 150px; display: flex; align-items: center; justify-content: center;
-    background: #fff; border-bottom: 1px solid var(--color-gray-200);
-    overflow: hidden;
-  }
-  .thumb-canvas-wrap canvas { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
-  .thumb-loading {
-    font-size: var(--font-xs); color: var(--color-gray-500);
-    display: flex; align-items: center; justify-content: center;
-    width: 100%; height: 100%;
-  }
-  .thumb-error {
-    display: flex; align-items: center; justify-content: center;
-    height: 150px; font-size: 1.5rem; background: #fdecea;
-    border-bottom: 1px solid #f5c6cb;
-  }
-
-  .thumb-info { padding: var(--space-2); display: flex; flex-direction: column; gap: 2px; }
-  .thumb-name {
-    font-size: 0.65rem; font-weight: 500; color: var(--color-gray-900);
-    overflow: hidden; line-height: 1.35;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-  }
-  .thumb-meta {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: var(--space-1); margin-top: 2px;
-  }
-  .thumb-pages { font-size: var(--font-xs); font-weight: 700; color: var(--color-primary); white-space: nowrap; }
   .size-pill { font-size: 0.6rem; font-weight: 600; padding: 1px 5px; border-radius: 1rem; white-space: nowrap; }
 
   /* ── Results ────────────────────────────────────────── */
-  .results { display: flex; flex-direction: column; gap: 0.5rem; }
-  .result-pills { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
+  .results { display: flex; flex-direction: column; gap: var(--space-3); }
+
+  /* Tarjeta horizontal: thumbnail | info */
+  .result-card {
+    display: flex; align-items: stretch;
+    background: var(--color-white); border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-lg); overflow: hidden;
+    transition: box-shadow 0.2s, border-color 0.2s;
+  }
+  .result-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.09); border-color: var(--color-primary); }
+  .result-card.is-error { border-color: #f5c6cb; background: #fdecea; }
+
+  /* Columna izquierda: canvas */
+  .result-thumb {
+    flex-shrink: 0; width: 90px;
+    background: var(--color-gray-100);
+    border-right: 1px solid var(--color-gray-200);
+    display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden;
+  }
+  .result-thumb canvas {
+    width: 100%; height: 100%; object-fit: contain; display: block;
+  }
+  .result-thumb-loading {
+    font-size: var(--font-xs); color: var(--color-gray-500); text-align: center; padding: var(--space-2);
+  }
+  .result-thumb-error {
+    font-size: 1.8rem; display: flex; align-items: center; justify-content: center;
+    width: 100%; height: 100%; min-height: 100px;
+  }
+
+  /* Columna derecha: info */
+  .result-info {
+    flex: 1; min-width: 0;
+    padding: var(--space-3) var(--space-4);
+    display: flex; flex-direction: column; gap: var(--space-1); justify-content: center;
+  }
+  .result-name {
+    font-size: var(--font-sm); font-weight: 600; color: var(--color-gray-900);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 2px;
+  }
+  .result-pages-big {
+    font-size: var(--font-xl); font-weight: 700; color: var(--color-primary); line-height: 1;
+  }
+  .result-sheets-row { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-1); }
+  .result-size-row   { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: 2px; }
 </style>
 
 <script>
 (function () {
-  // ── PDF.js worker ────────────────────────────────────
   // @ts-ignore
   pdfjsLib.GlobalWorkerOptions.workerSrc =
     'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-  // ── Referencias ──────────────────────────────────────
-  const fileInput   = document.getElementById('fileInput')   as HTMLInputElement;
-  const totalsEl    = document.getElementById('totals')      as HTMLDivElement;
-  const sizesPanel  = document.getElementById('sizesPanel')  as HTMLDivElement;
-  const sizesList   = document.getElementById('sizesList')   as HTMLDivElement;
-  const thumbsPanel = document.getElementById('thumbsPanel') as HTMLDivElement;
-  const thumbsGrid  = document.getElementById('thumbsGrid')  as HTMLDivElement;
-  const resultsEl   = document.getElementById('results')     as HTMLDivElement;
+  const fileInput  = document.getElementById('fileInput')  as HTMLInputElement;
+  const totalsEl   = document.getElementById('totals')     as HTMLDivElement;
+  const sizesPanel = document.getElementById('sizesPanel') as HTMLDivElement;
+  const sizesList  = document.getElementById('sizesList')  as HTMLDivElement;
+  const resultsEl  = document.getElementById('results')    as HTMLDivElement;
 
   type PdfEntry = {
     name: string; pages: number; pageSizes: Record<string, number>;
@@ -241,23 +220,17 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   };
   let pdfData: PdfEntry[] = [];
 
-  // ── Listeners de carga ───────────────────────────────
   fileInput.addEventListener('change', e => {
-    // Nuevo lote — reemplaza
     pdfData = [];
-    thumbsGrid.innerHTML = '';
+    resultsEl.innerHTML = '';
     handleFiles((e.target as HTMLInputElement).files!);
   });
 
   const fileInputMore = document.getElementById('fileInputMore') as HTMLInputElement;
-  if (fileInputMore) {
-    fileInputMore.addEventListener('change', e =>
-      // Agrega al lote existente
-      handleFiles((e.target as HTMLInputElement).files!)
-    );
-  }
+  if (fileInputMore) fileInputMore.addEventListener('change', e =>
+    handleFiles((e.target as HTMLInputElement).files!)
+  );
 
-  // ── Clasificación de tamaños ─────────────────────────
   function classifySize(wMM: number, hMM: number): string {
     const w = Math.min(wMM, hMM), h = Math.max(wMM, hMM), tol = 5;
     const sizes = [
@@ -282,7 +255,6 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     return 'sz-other';
   }
 
-  // ── Lectura de archivos ──────────────────────────────
   async function handleFiles(files: FileList) {
     const valid = Array.from(files).filter(f => f.type === 'application/pdf');
     if (!valid.length) return;
@@ -310,83 +282,88 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     renderAll();
   }
 
-  // ── Construir tarjeta de miniatura ───────────────────
-  async function buildThumbCard(entry: PdfEntry): Promise<HTMLElement> {
+  // Construye y agrega la tarjeta horizontal al DOM,
+  // luego renderiza el thumb de forma asíncrona sin bloquear.
+  function appendResultCard(entry: PdfEntry, pagesPerSide: number, printType: number) {
     const card = document.createElement('div');
-    card.className = 'thumb-card';
+    card.className = `result-card${entry.error ? ' is-error' : ''}`;
 
-    const wrap = document.createElement('div');
-    wrap.className = 'thumb-canvas-wrap';
+    // ── Columna thumb ────────────────────────────────────
+    const thumbCol = document.createElement('div');
+    thumbCol.className = 'result-thumb';
 
     if (entry.error || !entry.pdfDoc) {
-      wrap.innerHTML = '<div class="thumb-error">⚠️</div>';
+      thumbCol.innerHTML = '<div class="result-thumb-error">⚠️</div>';
     } else {
-      wrap.innerHTML = '<div class="thumb-loading">Cargando…</div>';
+      thumbCol.innerHTML = '<div class="result-thumb-loading">…</div>';
+      // render asíncrono de la primera página
       (async () => {
         try {
-          const page   = await entry.pdfDoc.getPage(1);
-          const scale  = 140 / page.getViewport({ scale: 1 }).height;
-          const vp     = page.getViewport({ scale });
+          const page  = await entry.pdfDoc.getPage(1);
+          const vp0   = page.getViewport({ scale: 1 });
+          // Queremos que el canvas tenga ~90 px de ancho máx
+          const scale = 88 / vp0.width;
+          const vp    = page.getViewport({ scale });
           const canvas = document.createElement('canvas');
           canvas.width  = Math.floor(vp.width);
           canvas.height = Math.floor(vp.height);
           await page.render({ canvasContext: canvas.getContext('2d')!, viewport: vp }).promise;
-          wrap.innerHTML = '';
-          wrap.appendChild(canvas);
+          thumbCol.innerHTML = '';
+          thumbCol.appendChild(canvas);
         } catch {
-          wrap.innerHTML = '<div class="thumb-error">⚠️</div>';
+          thumbCol.innerHTML = '<div class="result-thumb-error">⚠️</div>';
         }
       })();
     }
 
-    const info = document.createElement('div');
-    info.className = 'thumb-info';
+    // ── Columna info ─────────────────────────────────────
+    const infoCol = document.createElement('div');
+    infoCol.className = 'result-info';
 
-    const nameEl = document.createElement('div');
-    nameEl.className = 'thumb-name';
-    nameEl.title = entry.name;
-    nameEl.textContent = entry.name;
-
-    const meta = document.createElement('div');
-    meta.className = 'thumb-meta';
-
-    const pagesEl = document.createElement('span');
-    pagesEl.className = 'thumb-pages';
-    pagesEl.textContent = entry.error ? 'Error' : `${entry.pages} pág.`;
-    meta.appendChild(pagesEl);
-
-    if (!entry.error) {
-      const dominant = Object.entries(entry.pageSizes).sort((a,b) => b[1]-a[1])[0];
-      if (dominant) {
-        const pill = document.createElement('span');
-        pill.className = `size-pill ${getSizeClass(dominant[0])}`;
-        pill.textContent = dominant[0];
-        meta.appendChild(pill);
+    if (entry.error) {
+      infoCol.innerHTML = `
+        <div class="result-name" title="${entry.name}">${entry.name}</div>
+        <div style="font-size:var(--font-xs);color:#c0392b">No se pudo leer el archivo</div>`;
+    } else {
+      const sheets     = (entry.pages / pagesPerSide) / printType;
+      const fullSheets = Math.floor(sheets);
+      const hasRem     = sheets % 1 !== 0;
+      let double = 0, single = 0;
+      if (printType === 2) {
+        double = fullSheets;
+        if (hasRem) single = 1;
+      } else {
+        single = Math.ceil(sheets);
       }
+
+      const sheetBadges = [
+        double > 0 ? `<span class="size-badge sz-a4">${double} doble${double !== 1 ? 's' : ''}</span>` : '',
+        single > 0 ? `<span class="size-badge sz-a5">${single} simple${single !== 1 ? 's' : ''}</span>` : '',
+      ].filter(Boolean).join('');
+
+      const sizePills = Object.entries(entry.pageSizes)
+        .sort((a,b) => b[1]-a[1])
+        .map(([sz, cnt]) => {
+          const label = cnt === entry.pages ? sz : `${sz} ×${cnt}`;
+          return `<span class="size-pill ${getSizeClass(sz)}">${label}</span>`;
+        }).join('');
+
+      infoCol.innerHTML = `
+        <div class="result-name" title="${entry.name}">${entry.name}</div>
+        <div class="result-pages-big">${entry.pages} <span style="font-size:var(--font-sm);font-weight:500;color:var(--color-gray-500)">pág.</span></div>
+        <div class="result-sheets-row">${sheetBadges}</div>
+        <div class="result-size-row">${sizePills}</div>`;
     }
 
-    info.appendChild(nameEl);
-    info.appendChild(meta);
-    card.appendChild(wrap);
-    card.appendChild(info);
-    return card;
+    card.appendChild(thumbCol);
+    card.appendChild(infoCol);
+    resultsEl.appendChild(card);
   }
 
-  // ── Render completo ───────────────────────────────────
   async function renderAll() {
     if (!pdfData.length) return;
     if (typeof (window as any).toolReady === 'function') (window as any).toolReady();
 
-    // Thumbnails — sólo agrega las nuevas (las anteriores ya están en el grid)
-    thumbsPanel.hidden = false;
-    for (const entry of pdfData.slice(thumbsGrid.children.length)) {
-      thumbsGrid.appendChild(await buildThumbCard(entry));
-    }
-
-    calculateAndRender();
-  }
-
-  function calculateAndRender() {
     const pagesPerSide = parseInt(
       (document.querySelector('input[name="pagesPerSide"]:checked') as HTMLInputElement).value
     );
@@ -394,67 +371,35 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
       (document.querySelector('input[name="printType"]:checked') as HTMLInputElement).value
     );
 
+    // Sólo agrega las tarjetas nuevas (fileInputMore no limpia)
+    const existing = resultsEl.children.length;
+    for (const entry of pdfData.slice(existing)) {
+      appendResultCard(entry, pagesPerSide, printType);
+    }
+
+    renderTotals(pagesPerSide, printType);
+  }
+
+  function renderTotals(pagesPerSide: number, printType: number) {
     let totalPages = 0, totalDouble = 0, totalSingle = 0;
     const globalSizes: Record<string, number> = {};
-    resultsEl.innerHTML = '';
 
     for (const pdf of pdfData) {
-      if (pdf.error) {
-        resultsEl.innerHTML += `
-          <article class="border rounded-lg p-3" style="background:#fdecea;border-color:#f5c6cb">
-            <p class="text-sm font-medium mb-0" style="word-break:break-all">${pdf.name}</p>
-            <p class="text-xs mb-0" style="color:#c0392b">No se pudo leer el archivo</p>
-          </article>`;
-        continue;
-      }
-
+      if (pdf.error) continue;
       totalPages += pdf.pages;
       for (const [sz, cnt] of Object.entries(pdf.pageSizes)) {
         globalSizes[sz] = (globalSizes[sz] || 0) + cnt;
       }
-
       const sheets     = (pdf.pages / pagesPerSide) / printType;
       const fullSheets = Math.floor(sheets);
-      const hasRem     = sheets % 1 !== 0;
-      let double = 0, single = 0;
-
       if (printType === 2) {
-        double = fullSheets;
-        if (hasRem) single = 1;
-        totalDouble += double; totalSingle += single;
+        totalDouble += fullSheets;
+        if (sheets % 1 !== 0) totalSingle += 1;
       } else {
-        single = Math.ceil(sheets);
-        totalSingle += single;
+        totalSingle += Math.ceil(sheets);
       }
-
-      // Badges de hojas — sólo los que tengan valor
-      const sheetBadges = [
-        double > 0 ? `<span class="size-badge sz-a4">${double} doble${double !== 1 ? 's' : ''}</span>` : '',
-        single > 0 ? `<span class="size-badge sz-a5">${single} simple${single !== 1 ? 's' : ''}</span>` : '',
-      ].filter(Boolean).join('');
-
-      // Badges de tamaño de hoja
-      const sizePills = Object.entries(pdf.pageSizes)
-        .sort((a, b) => b[1] - a[1])
-        .map(([sz, cnt]) => {
-          const label = cnt === pdf.pages ? sz : `${sz} ×${cnt}`;
-          return `<span class="size-pill ${getSizeClass(sz)}">${label}</span>`;
-        }).join('');
-
-      resultsEl.innerHTML += `
-        <article class="border rounded-lg p-3 bg-white">
-          <div class="flex justify-between items-center gap-4">
-            <p class="text-sm font-medium mb-1" style="word-break:break-all;min-width:0;flex:1">${pdf.name}</p>
-            <span class="text-xl font-bold text-primary" style="white-space:nowrap;flex-shrink:0">${pdf.pages} pág.</span>
-          </div>
-          <div class="flex flex-wrap gap-2" style="margin-top:4px">
-            ${sheetBadges}
-            <div class="result-pills">${sizePills}</div>
-          </div>
-        </article>`;
     }
 
-    // ── Totales con clases del framework ─────────────────
     const validCount = pdfData.filter(p => !p.error).length;
     totalsEl.innerHTML = `
       <div class="bg-white border rounded-lg p-4 text-center">
@@ -476,7 +421,6 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
         <p class="text-2xl font-bold mb-0" style="color:#92400e">${totalSingle}</p>
       </div>` : ''}`;
 
-    // ── Tamaños detectados ────────────────────────────────
     const sizeEntries = Object.entries(globalSizes).sort((a, b) => b[1] - a[1]);
     if (sizeEntries.length) {
       sizesPanel.hidden = false;
@@ -488,10 +432,20 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     }
   }
 
-  // Recalcular al cambiar opciones del sidebar
+  function recalcAll() {
+    if (!pdfData.length) return;
+    resultsEl.innerHTML = '';
+    const pagesPerSide = parseInt(
+      (document.querySelector('input[name="pagesPerSide"]:checked') as HTMLInputElement).value
+    );
+    const printType = parseInt(
+      (document.querySelector('input[name="printType"]:checked') as HTMLInputElement).value
+    );
+    for (const entry of pdfData) appendResultCard(entry, pagesPerSide, printType);
+    renderTotals(pagesPerSide, printType);
+  }
+
   document.querySelectorAll('input[name="pagesPerSide"], input[name="printType"]')
-    .forEach(input => input.addEventListener('change', () => {
-      if (pdfData.length) calculateAndRender();
-    }));
+    .forEach(input => input.addEventListener('change', recalcAll));
 })();
 </script>
