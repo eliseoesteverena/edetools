@@ -138,22 +138,8 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   .radio-col input[type="radio"] { width: auto; cursor: pointer; }
 
   /* ── Totales ────────────────────────────────────────── */
-  .totals { display: flex; flex-wrap: wrap; gap: var(--space-3); }
-
-  .total-card {
-    flex: 1; min-width: 80px;
-    background: var(--color-white); border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-md); padding: var(--space-3) var(--space-4);
-    text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-  }
-  .total-card .t-label {
-    font-size: var(--font-xs); color: var(--color-gray-500);
-    text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: var(--space-1);
-  }
-  .total-card .t-value { font-size: var(--font-3xl); font-weight: 700; line-height: 1; }
-  .total-card.primary .t-value { color: var(--color-primary); }
-  .total-card.success .t-value { color: #166534; }
-  .total-card.warning .t-value { color: #92400e; }
+  .totals { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+  .totals > * { flex: 1; min-width: 72px; }
 
   /* ── Tamaños ────────────────────────────────────────── */
   .section-label {
@@ -217,8 +203,9 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
 
   .thumb-info { padding: var(--space-2); display: flex; flex-direction: column; gap: 2px; }
   .thumb-name {
-    font-size: var(--font-xs); font-weight: 500; color: var(--color-gray-900);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.3;
+    font-size: 0.65rem; font-weight: 500; color: var(--color-gray-900);
+    overflow: hidden; line-height: 1.35;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
   }
   .thumb-meta {
     display: flex; align-items: center; justify-content: space-between;
@@ -228,23 +215,8 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
   .size-pill { font-size: 0.6rem; font-weight: 600; padding: 1px 5px; border-radius: 1rem; white-space: nowrap; }
 
   /* ── Results ────────────────────────────────────────── */
-  .results { display: flex; flex-direction: column; gap: var(--space-2); }
-
-  .result-item {
-    display: flex; align-items: center; justify-content: space-between; gap: var(--space-4);
-    padding: var(--space-3) var(--space-4); border-radius: var(--radius-md);
-    background: var(--color-white); border: 1px solid var(--color-gray-200);
-    transition: box-shadow 0.15s;
-  }
-  .result-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
-  .result-item.is-error { background: #fdecea; border-color: #f5c6cb; }
-
-  .result-info { flex: 1; min-width: 0; }
-  .result-name { font-size: var(--font-sm); font-weight: 500; color: var(--color-gray-900); word-break: break-all; margin-bottom: 2px; }
-  .result-sheets { font-size: var(--font-xs); color: var(--color-gray-500); }
+  .results { display: flex; flex-direction: column; gap: 0.5rem; }
   .result-pills { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 4px; }
-  .result-pages { font-size: var(--font-xl); font-weight: 700; color: var(--color-primary); white-space: nowrap; flex-shrink: 0; }
-  .result-item.is-error .result-pages { color: var(--color-accent, #dc2626); }
 </style>
 
 <script>
@@ -429,10 +401,10 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
     for (const pdf of pdfData) {
       if (pdf.error) {
         resultsEl.innerHTML += `
-          <div class="result-item is-error">
-            <div class="result-info"><div class="result-name">${pdf.name}</div></div>
-            <div class="result-pages">Error</div>
-          </div>`;
+          <article class="border rounded-lg p-3" style="background:#fdecea;border-color:#f5c6cb">
+            <p class="text-sm font-medium mb-0" style="word-break:break-all">${pdf.name}</p>
+            <p class="text-xs mb-0" style="color:#c0392b">No se pudo leer el archivo</p>
+          </article>`;
         continue;
       }
 
@@ -455,11 +427,14 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
         totalSingle += single;
       }
 
-      const sheetText = printType === 2
-        ? `${double} doble${double !== 1 ? 's' : ''} + ${single} simple${single !== 1 ? 's' : ''}`
-        : `${single} hoja${single !== 1 ? 's' : ''}`;
+      // Badges de hojas — sólo los que tengan valor
+      const sheetBadges = [
+        double > 0 ? `<span class="size-badge sz-a4">${double} doble${double !== 1 ? 's' : ''}</span>` : '',
+        single > 0 ? `<span class="size-badge sz-a5">${single} simple${single !== 1 ? 's' : ''}</span>` : '',
+      ].filter(Boolean).join('');
 
-      const pills = Object.entries(pdf.pageSizes)
+      // Badges de tamaño de hoja
+      const sizePills = Object.entries(pdf.pageSizes)
         .sort((a, b) => b[1] - a[1])
         .map(([sz, cnt]) => {
           const label = cnt === pdf.pages ? sz : `${sz} ×${cnt}`;
@@ -467,39 +442,41 @@ import ToolLayout from '../../layouts/ToolLayout.astro';
         }).join('');
 
       resultsEl.innerHTML += `
-        <div class="result-item">
-          <div class="result-info">
-            <div class="result-name">${pdf.name}</div>
-            <div class="result-sheets">${sheetText}</div>
-            <div class="result-pills">${pills}</div>
+        <article class="border rounded-lg p-3 bg-white">
+          <div class="flex justify-between items-center gap-4">
+            <p class="text-sm font-medium mb-1" style="word-break:break-all;min-width:0;flex:1">${pdf.name}</p>
+            <span class="text-xl font-bold text-primary" style="white-space:nowrap;flex-shrink:0">${pdf.pages} pág.</span>
           </div>
-          <div class="result-pages">${pdf.pages} pág.</div>
-        </div>`;
+          <div class="flex flex-wrap gap-2" style="margin-top:4px">
+            ${sheetBadges}
+            <div class="result-pills">${sizePills}</div>
+          </div>
+        </article>`;
     }
 
-    // Totales
+    // ── Totales con clases del framework ─────────────────
     const validCount = pdfData.filter(p => !p.error).length;
     totalsEl.innerHTML = `
-      <div class="total-card primary">
-        <div class="t-label">PDFs</div>
-        <div class="t-value">${validCount}</div>
+      <div class="bg-white border rounded-lg p-4 text-center">
+        <p class="text-xs text-gray-500 font-semibold mb-1" style="text-transform:uppercase;letter-spacing:.08em">PDFs</p>
+        <p class="text-2xl font-bold text-primary mb-0">${validCount}</p>
       </div>
-      <div class="total-card primary">
-        <div class="t-label">Páginas</div>
-        <div class="t-value">${totalPages}</div>
+      <div class="bg-white border rounded-lg p-4 text-center">
+        <p class="text-xs text-gray-500 font-semibold mb-1" style="text-transform:uppercase;letter-spacing:.08em">Páginas</p>
+        <p class="text-2xl font-bold text-primary mb-0">${totalPages}</p>
       </div>
       ${totalDouble > 0 ? `
-      <div class="total-card success">
-        <div class="t-label">Doble faz</div>
-        <div class="t-value">${totalDouble}</div>
+      <div class="bg-white border rounded-lg p-4 text-center">
+        <p class="text-xs text-gray-500 font-semibold mb-1" style="text-transform:uppercase;letter-spacing:.08em">Doble faz</p>
+        <p class="text-2xl font-bold mb-0" style="color:#166534">${totalDouble}</p>
       </div>` : ''}
       ${totalSingle > 0 ? `
-      <div class="total-card warning">
-        <div class="t-label">Simple faz</div>
-        <div class="t-value">${totalSingle}</div>
+      <div class="bg-white border rounded-lg p-4 text-center">
+        <p class="text-xs text-gray-500 font-semibold mb-1" style="text-transform:uppercase;letter-spacing:.08em">Simple faz</p>
+        <p class="text-2xl font-bold mb-0" style="color:#92400e">${totalSingle}</p>
       </div>` : ''}`;
 
-    // Tamaños
+    // ── Tamaños detectados ────────────────────────────────
     const sizeEntries = Object.entries(globalSizes).sort((a, b) => b[1] - a[1]);
     if (sizeEntries.length) {
       sizesPanel.hidden = false;
