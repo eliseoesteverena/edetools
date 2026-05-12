@@ -1,673 +1,956 @@
 ---
 // src/pages/herramientas/carta-documento.astro
-// Herramienta: Formato Carta Documento (Correo Argentino)
-//
-// Arquitectura original: dos archivos separados (formulario + iframe con template).
-// Adaptación: página única. El formulario y la plantilla de impresión conviven.
-// Al imprimir, @media print oculta el formulario y muestra solo la plantilla
-// posicionada con los márgenes configurables sobre la hoja pre-impresa.
-//
-// Dependencias externas:
-//   - Quill 2 (editor rich text) — desde CDN
-//   - CSS de Quill inlined en <style> para evitar requests externos en impresión
-
+// Herramienta: Formato Carta Documento
+// Editor enriquecido: Tiptap v2 (bundle IIFE autocontenido, sin CDN externo)
+// PDF: pdf-lib client-side (import dinámico desde esm.sh)
+// Coordenadas: Correo Argentino (definitivas) / Andreani (ajustables por vos)
 import ToolLayout from '../../layouts/ToolLayout.astro';
 ---
 
 <ToolLayout
-  title="Formato Carta Documento"
-  description="Completá los datos e imprimí sobre la hoja pre-impresa de Correo Argentino."
+  title="Carta Documento"
+  description="Completá los datos e imprimí sobre la hoja pre-impresa."
   icon="📄"
   mode="form"
-  actionLabel="Formulario"
+  actionLabel="Configuración"
   tags={[
     { label: 'impresión', type: 'print' },
     { label: 'client-side', type: 'web' },
   ]}
 >
 
-  <!-- Quill CSS desde CDN (solo toolbar, se usa en pantalla) -->
-  <link
-    rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/quill@2.0.0-rc.5/dist/quill.snow.css"
-  />
-
-  <!-- Estilos de posicionamiento de la plantilla de impresión -->
-  <!-- Inlined desde template-correo-arg.css y qr-editor-for-template.css -->
-  <style id="template-styles">
-    /* ── template-correo-arg.css ─────────────────────── */
-    .cd-page { box-sizing: border-box; }
-    .cd-page * { box-sizing: border-box; }
-
-    .cd-page .page {
-      width: 21.59cm;
-      height: 35.56cm;
-      margin: 0;
-      font-family: Arial, Helvetica, sans-serif;
-    }
-
-    .cd-page .container {
-      width: 19cm;
-      height: 29.2cm;
-      position: absolute;
-      font-size: 10pt;
-    }
-
-    .cd-page .datos {
-      width: 16.2cm;
-      height: 2.87cm;
-      float: left;
-    }
-
-    .cd-page .cabecera {
-      width: 19cm;
-      margin-left: 1.2cm;
-      float: left;
-    }
-
-    .cd-page .n {
-      width: 9.2cm;
-      height: 1.27cm;
-      text-transform: capitalize;
-      float: left;
-      word-wrap: break-word;
-    }
-
-    .cd-page .address-c {
-      width: 19cm;
-      height: 0.84cm;
-      float: left;
-      margin-left: 1.2cm;
-    }
-
-    .cd-page .a {
-      width: 9.2cm;
-      height: 0.84cm;
-      padding-top: 0.5cm;
-      float: left;
-    }
-
-    .cd-page .zip-city-state {
-      width: 19cm;
-      height: 0.75cm;
-      float: left;
-      margin-left: 1.09cm;
-    }
-
-    .cd-page .zip-city-state-int {
-      height: 0.85cm;
-      float: left;
-      width: 9.2cm;
-    }
-
-    .cd-page .zip {
-      width: 2.75cm;
-      padding: 0.5cm 0.15cm 0 0.15cm;
-      height: 0.75cm;
-      float: left;
-    }
-
-    .cd-page .city {
-      width: 3.6cm;
-      padding: 0.5cm 0.15cm 0 0.15cm;
-      height: 0.75cm;
-      float: left;
-    }
-
-    .cd-page .state {
-      width: 2.8cm;
-      padding: 0.5cm 0.15cm 0 0.15cm;
-      height: 0.75cm;
-      float: left;
-    }
-
-    .cd-page .l-enty {
-      width: 16.23cm;
-      height: 7.42cm;
-      float: left;
-    }
-
-    .cd-page .contenido-carta {
-      width: 19.95cm;
-      min-height: 13.17cm;
-      max-height: 14cm;
-      padding: 0.3cm;
-      float: left;
-      text-align: justify;
-      text-overflow: ellipsis;
-      white-space: pre-wrap;
-    }
-
-    .cd-page .content-firma {
-      width: 18.1cm;
-      height: 1.4cm;
-      float: left;
-      position: absolute;
-      bottom: 0;
-    }
-
-    .cd-page .c-firma {
-      right: 0;
-      position: absolute;
-    }
-
-    .cd-page .c-firma,
-    .cd-page .e-firma,
-    .cd-page .firmante,
-    .cd-page .dni {
-      width: 6cm;
-      text-align: center;
-    }
-
-    .cd-page .e-firma { height: 2.4cm; }
-    .cd-page .dni     { height: 0.75cm; }
-
-    /* ── Quill output en la plantilla de impresión ────── */
-    .cd-page .contenido-carta p,
-    .cd-page .contenido-carta ol,
-    .cd-page .contenido-carta ul,
-    .cd-page .contenido-carta pre,
-    .cd-page .contenido-carta blockquote,
-    .cd-page .contenido-carta h1,
-    .cd-page .contenido-carta h2,
-    .cd-page .contenido-carta h3 { margin: 0; padding: 0; }
-
-    .cd-page .contenido-carta .ql-align-center  { text-align: center; }
-    .cd-page .contenido-carta .ql-align-right   { text-align: right; }
-    .cd-page .contenido-carta .ql-align-justify { text-align: justify; }
-
-    .cd-page .contenido-carta .ql-size-small { font-size: 0.75em; }
-    .cd-page .contenido-carta .ql-size-large { font-size: 1.5em; }
-    .cd-page .contenido-carta .ql-size-huge  { font-size: 2.5em; }
-  </style>
-
-  <!-- ── FORMULARIO ──────────────────────────────────── -->
-  <div class="form-wrap" id="formWrap">
-
-    <div class="form-grid">
-
-      <!-- Remitente -->
-      <div class="form-card">
-        <h2 class="form-card-title">Remitente</h2>
-        <div class="field-row">
-          <div class="field">
-            <label for="name_rt">Nombre y Apellido</label>
-            <input type="text" id="name_rt" placeholder="Juan Pérez" />
-          </div>
-          <div class="field">
-            <label for="address_rt">Dirección</label>
-            <input type="text" id="address_rt" placeholder="Av. Corrientes 1234" />
-          </div>
-        </div>
-        <div class="field-row field-row--3">
-          <div class="field">
-            <label for="cp_rt">Cód. Postal</label>
-            <input type="text" id="cp_rt" placeholder="1043" />
-          </div>
-          <div class="field field--grow">
-            <label for="city_rt">Localidad</label>
-            <input type="text" id="city_rt" placeholder="Buenos Aires" />
-          </div>
-          <div class="field field--grow">
-            <label for="state_rt">Provincia</label>
-            <input type="text" id="state_rt" placeholder="CABA" />
+  <!-- ══ ÁREA PRINCIPAL: preview de la hoja ══════════════════ -->
+  <div class="cd-main">
+    <section class="preview-panel" aria-label="Previsualización">
+      <div class="preview-header">
+        <span class="preview-title">Previsualización</span>
+        <span class="preview-hint" id="previewHint">Completá los datos para ver la carta</span>
+      </div>
+      <div class="preview-area">
+        <div class="preview-grid-bg">
+          <!-- Hoja carta documento (21.59 × 35.56 cm) → aspecto ~0.607 -->
+          <div class="preview-sheet-card" id="previewSheetCard">
+            <div class="preview-sheet-inner" id="previewSheetInner">
+              <div class="sheet-placeholder" id="sheetPlaceholder">
+                <span>📄</span>
+                <small>La carta aparecerá aquí</small>
+              </div>
+            </div>
           </div>
         </div>
       </div>
+    </section>
+  </div>
 
-      <!-- Destinatario -->
-      <div class="form-card">
-        <h2 class="form-card-title">Destinatario</h2>
-        <div class="field-row">
-          <div class="field">
-            <label for="name_dt">Nombre y Apellido</label>
-            <input type="text" id="name_dt" placeholder="María García" />
-          </div>
-          <div class="field">
-            <label for="address_dt">Dirección</label>
-            <input type="text" id="address_dt" placeholder="Belgrano 567" />
-          </div>
-        </div>
-        <div class="field-row field-row--3">
-          <div class="field">
-            <label for="cp_dt">Cód. Postal</label>
-            <input type="text" id="cp_dt" placeholder="3000" />
-          </div>
-          <div class="field field--grow">
-            <label for="city_dt">Localidad</label>
-            <input type="text" id="city_dt" placeholder="Santa Fe" />
-          </div>
-          <div class="field field--grow">
-            <label for="state_dt">Provincia</label>
-            <input type="text" id="state_dt" placeholder="Santa Fe" />
-          </div>
-        </div>
+  <!-- ══ SIDEBAR ══════════════════════════════════════════════ -->
+  <div slot="sidebar" class="cd-sidebar">
+
+    <!-- Remitente -->
+    <div class="sb-section-title">Remitente</div>
+    <div class="field">
+      <label for="name_rt">Nombre y Apellido</label>
+      <input type="text" id="name_rt" placeholder="Juan Pérez" />
+    </div>
+    <div class="field">
+      <label for="address_rt">Dirección</label>
+      <input type="text" id="address_rt" placeholder="Av. Corrientes 1234" />
+    </div>
+    <div class="field-row-3">
+      <div class="field">
+        <label for="cp_rt">C.P.</label>
+        <input type="text" id="cp_rt" placeholder="1043" />
       </div>
-
+      <div class="field field-grow">
+        <label for="city_rt">Localidad</label>
+        <input type="text" id="city_rt" placeholder="Buenos Aires" />
+      </div>
+      <div class="field field-grow">
+        <label for="state_rt">Provincia</label>
+        <input type="text" id="state_rt" placeholder="CABA" />
+      </div>
     </div>
 
-    <!-- Cuerpo -->
-    <div class="form-card">
-      <h2 class="form-card-title">Cuerpo de la carta</h2>
-      <div
-        id="editor"
-        style="height: 320px; font-family: Arial, Helvetica, sans-serif;"
-      ></div>
+    <div class="sb-divider"></div>
+
+    <!-- Destinatario -->
+    <div class="sb-section-title">Destinatario</div>
+    <div class="field">
+      <label for="name_dt">Nombre y Apellido</label>
+      <input type="text" id="name_dt" placeholder="María García" />
     </div>
+    <div class="field">
+      <label for="address_dt">Dirección</label>
+      <input type="text" id="address_dt" placeholder="Belgrano 567" />
+    </div>
+    <div class="field-row-3">
+      <div class="field">
+        <label for="cp_dt">C.P.</label>
+        <input type="text" id="cp_dt" placeholder="3000" />
+      </div>
+      <div class="field field-grow">
+        <label for="city_dt">Localidad</label>
+        <input type="text" id="city_dt" placeholder="Santa Fe" />
+      </div>
+      <div class="field field-grow">
+        <label for="state_dt">Provincia</label>
+        <input type="text" id="state_dt" placeholder="Santa Fe" />
+      </div>
+    </div>
+
+    <div class="sb-divider"></div>
 
     <!-- Firma -->
-    <div class="form-card">
-      <h2 class="form-card-title">Firma</h2>
-      <div class="field-row">
-        <div class="field">
-          <label for="sing_name">Nombre y Apellido</label>
-          <input type="text" id="sing_name" placeholder="Juan Pérez" />
-        </div>
-        <div class="field">
-          <label for="sing_dni">DNI</label>
-          <input type="text" id="sing_dni" placeholder="12.345.678" />
-        </div>
+    <div class="sb-section-title">Firma</div>
+    <div class="field-row-2">
+      <div class="field">
+        <label for="sing_name">Nombre y Apellido</label>
+        <input type="text" id="sing_name" placeholder="Juan Pérez" />
+      </div>
+      <div class="field">
+        <label for="sing_dni">DNI</label>
+        <input type="text" id="sing_dni" placeholder="12.345.678" />
       </div>
     </div>
 
-    <!-- Config avanzada -->
-    <details class="advanced-config">
-      <summary>Configuración avanzada de márgenes</summary>
+    <div class="sb-divider"></div>
+
+    <!-- Márgenes avanzados -->
+    <details class="adv-details">
+      <summary>Márgenes avanzados</summary>
       <div class="adv-inner">
-        <p class="adv-hint">
-          Ajustá la posición del contenido sobre la hoja pre-impresa.
-          Los valores por defecto están calibrados para el formulario estándar de Correo Argentino.
-        </p>
-        <div class="field-row">
+        <p class="adv-hint">Ajustá la posición sobre la hoja pre-impresa (en cm).</p>
+        <div class="field-row-2">
           <div class="field">
-            <label for="margin_left">Margen izquierdo (cm)</label>
-            <input type="number" id="margin_left" step="0.01" value="0.60" />
+            <label for="margin_top">Margen superior</label>
+            <input type="number" id="margin_top" value="2.56" step="0.05" />
           </div>
           <div class="field">
-            <label for="margin_top">Margen superior (cm)</label>
-            <input type="number" id="margin_top" step="0.01" value="2.56" />
-          </div>
-          <div class="field field--btn">
-            <button type="button" id="res_margin" class="btn-reset-margins">
-              Restablecer
-            </button>
+            <label for="margin_left">Margen izquierdo</label>
+            <input type="number" id="margin_left" value="0.60" step="0.05" />
           </div>
         </div>
+        <button type="button" id="btn_reset_margins" class="btn-ghost">↺ Restablecer</button>
       </div>
     </details>
 
-    <!-- Botón imprimir -->
-    <div class="print-action">
-      <button type="button" id="printBtn" class="btn-print">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-          <path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/>
-          <rect x="6" y="14" width="12" height="8"/>
-          <circle cx="18" cy="11.5" r="0.5" fill="currentColor"/>
-        </svg>
-        Imprimir CD
-      </button>
+    <div class="sb-divider"></div>
+
+    <!-- Botones de descarga -->
+    <button class="btn-download btn-correo" id="btnCorreo" type="button">
+      Descargar CD — Correo Argentino
+    </button>
+    <button class="btn-download btn-andreani" id="btnAndreani" type="button">
+      Descargar CD — Andreani
+    </button>
+
+  </div>
+
+  <!-- ══ FORMULARIO (área secundaria debajo del preview) ══════ -->
+  <div class="cd-editor-wrap" slot="below">
+
+    <!-- Editor Tiptap -->
+    <div class="editor-card">
+      <div class="editor-card-title">Cuerpo de la carta</div>
+
+      <!-- Toolbar -->
+      <div class="tb" id="tb">
+        <button class="tbtn" id="b-bold"   title="Negrita"><b>B</b></button>
+        <button class="tbtn" id="b-italic" title="Cursiva"><i>I</i></button>
+        <button class="tbtn" id="b-under"  title="Subrayado"><u>U</u></button>
+        <button class="tbtn" id="b-strike" title="Tachado"><s>S</s></button>
+        <span class="tb-sep"></span>
+        <select class="tsel" id="s-ff" title="Fuente">
+          <option value="Arial,sans-serif"        selected>Arial</option>
+          <option value="Helvetica Neue,sans-serif">Helvetica</option>
+          <option value="Times New Roman,serif">Times New Roman</option>
+          <option value="Georgia,serif">Georgia</option>
+          <option value="Courier New,monospace">Courier New</option>
+          <option value="Verdana,sans-serif">Verdana</option>
+          <option value="Tahoma,sans-serif">Tahoma</option>
+          <option value="Garamond,serif">Garamond</option>
+        </select>
+        <select class="tsel" id="s-fs" title="Tamaño">
+          <option value="7pt">7pt</option>
+          <option value="8pt">8pt</option>
+          <option value="9pt">9pt</option>
+          <option value="10pt" selected>10pt</option>
+          <option value="11pt">11pt</option>
+          <option value="12pt">12pt</option>
+          <option value="13pt">13pt</option>
+          <option value="14pt">14pt</option>
+        </select>
+        <select class="tsel" id="s-lh" title="Interlineado">
+          <option value="0.8">↕ 0.8</option>
+          <option value="0.9">↕ 0.9</option>
+          <option value="1">↕ 1.0</option>
+          <option value="1.15">↕ 1.15</option>
+          <option value="1.5" selected>↕ 1.5</option>
+          <option value="1.75">↕ 1.75</option>
+          <option value="2">↕ 2.0</option>
+        </select>
+        <span class="tb-sep"></span>
+        <button class="tbtn" id="b-left"   title="Izquierda">←</button>
+        <button class="tbtn" id="b-center" title="Centrado">↔</button>
+        <button class="tbtn" id="b-right"  title="Derecha">→</button>
+        <button class="tbtn on" id="b-just" title="Justificado">≡</button>
+        <span class="tb-stat" id="tb-stat"></span>
+      </div>
+
+      <!-- Área de escritura — misma proporción que la caja de Tiptap: 19.5cm × 14cm -->
+      <div class="editor-viewport" id="editor-viewport">
+        <div class="editor-page" id="editor-page">
+          <div id="editor-mount"></div>
+        </div>
+      </div>
     </div>
 
-  </div><!-- /formWrap -->
-
-  <!-- ── PLANTILLA DE IMPRESIÓN ─────────────────────────
-       Invisible en pantalla. Al imprimir se muestra sola.
-       Los márgenes .container se aplican dinámicamente por JS.
-  ──────────────────────────────────────────────────── -->
-  <div class="cd-page" id="cdPage">
-    <div class="page">
-      <div class="container" id="cdContainer">
-
-        <!-- Bloque de datos × 2 (anverso y reverso de la hoja) -->
-        <div class="datos">
-          <div class="cabecera">
-            <div class="n" id="p_name_rt"></div>
-            <div class="n" id="p_name_dt"></div>
-          </div>
-          <div class="address-c">
-            <div class="a" id="p_address_rt"></div>
-            <div class="a" id="p_address_dt"></div>
-          </div>
-          <div class="zip-city-state">
-            <div class="zip-city-state-int">
-              <div class="zip"  id="p_cp_rt"></div>
-              <div class="city" id="p_city_rt"></div>
-              <div class="state" id="p_state_rt"></div>
-            </div>
-            <div class="zip-city-state-int">
-              <div class="zip"  id="p_cp_dt"></div>
-              <div class="city" id="p_city_dt"></div>
-              <div class="state" id="p_state_dt"></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="l-enty">&nbsp;</div>
-
-        <div class="datos">
-          <div class="cabecera">
-            <div class="n" id="p_name_rt2"></div>
-            <div class="n" id="p_name_dt2"></div>
-          </div>
-          <div class="address-c">
-            <div class="a" id="p_address_rt2"></div>
-            <div class="a" id="p_address_dt2"></div>
-          </div>
-          <div class="zip-city-state">
-            <div class="zip-city-state-int">
-              <div class="zip"  id="p_cp_rt2"></div>
-              <div class="city" id="p_city_rt2"></div>
-              <div class="state" id="p_state_rt2"></div>
-            </div>
-            <div class="zip-city-state-int">
-              <div class="zip"  id="p_cp_dt2"></div>
-              <div class="city" id="p_city_dt2"></div>
-              <div class="state" id="p_state_dt2"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Cuerpo -->
-        <div class="contenido-carta" id="p_body"></div>
-
-        <!-- Firma -->
-        <div class="content-firma">
-          <div class="c-firma">
-            <div class="e-firma">&nbsp;</div>
-            <div class="firmante" id="p_firmante"></div>
-            <div class="dni" id="p_dni"></div>
-          </div>
-        </div>
-
-      </div><!-- /container -->
-    </div><!-- /page -->
-  </div><!-- /cd-page -->
+  </div>
 
 </ToolLayout>
 
-<!-- ════════════════════════════════════════════════════
+<!-- ══════════════════════════════════════════════════════════
      ESTILOS
-════════════════════════════════════════════════════ -->
+══════════════════════════════════════════════════════════ -->
 <style>
-  /* ── Formulario ────────────────────────────────────── */
-  .form-wrap {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
-    max-width: 56rem;
+  /* ── Layout principal ───────────────────────────────────── */
+  .cd-main { display: flex; flex-direction: column; height: 100%; }
+
+  .preview-panel {
+    flex: 1; background: var(--color-white); border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-lg); overflow: hidden; display: flex; flex-direction: column;
   }
 
-  .form-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-4);
-  }
-
-  @media (max-width: 640px) {
-    .form-grid { grid-template-columns: 1fr; }
-  }
-
-  .form-card {
-    background: var(--color-white);
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-lg);
-    padding: var(--space-6);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
-
-  .form-card-title {
-    font-size: var(--font-sm);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--color-gray-500);
-    margin-bottom: var(--space-1);
-  }
-
-  .field-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--space-3);
-  }
-
-  .field-row--3 { grid-template-columns: auto 1fr 1fr; }
-  .field--grow  { flex: 1; }
-
-  .field {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-1);
-  }
-
-  .field--btn {
-    display: flex;
-    align-items: flex-end;
-  }
-
-  /* ── Config avanzada ────────────────────────────────── */
-  .advanced-config {
-    background: var(--color-white);
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-lg);
-    padding: var(--space-4) var(--space-6);
-  }
-
-  .advanced-config summary {
-    font-size: var(--font-sm);
-    font-weight: 500;
-    color: var(--color-gray-700);
-    cursor: pointer;
-    user-select: none;
-    list-style: none;
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-
-  .advanced-config summary::before {
-    content: '▶';
-    font-size: 0.6rem;
-    color: var(--color-gray-500);
-    transition: transform 0.2s;
-  }
-
-  .advanced-config[open] summary::before { transform: rotate(90deg); }
-
-  .adv-inner {
-    margin-top: var(--space-4);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-  }
-
-  .adv-hint {
-    font-size: var(--font-xs);
-    color: var(--color-gray-500);
+  .preview-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-gray-200);
     background: var(--color-gray-50);
-    border-left: 3px solid var(--color-gray-200);
-    padding: var(--space-2) var(--space-3);
-    border-radius: var(--radius-sm);
+  }
+
+  .preview-title { font-size: var(--font-sm); font-weight: 600; color: var(--color-gray-700); }
+  .preview-hint  { font-size: var(--font-xs); color: var(--color-gray-500); }
+
+  .preview-area {
+    flex: 1; overflow: auto; display: flex; align-items: center; justify-content: center;
+    padding: var(--space-6); min-height: 280px;
+  }
+
+  .preview-grid-bg {
+    width: 100%; height: 100%; min-height: 260px;
+    display: flex; align-items: center; justify-content: center;
+    background-color: #f0f2f5;
+    background-image:
+      linear-gradient(to right, #d5d8de 1px, transparent 1px),
+      linear-gradient(to bottom, #d5d8de 1px, transparent 1px);
+    background-size: 20px 20px;
+    border-radius: var(--radius-md); padding: var(--space-6);
+  }
+
+  /* Hoja carta-documento: proporción 21.59 × 35.56 = 0.607 */
+  .preview-sheet-card {
+    background: #fff;
+    box-shadow: 0 4px 24px rgba(0,0,0,.18), 0 1px 4px rgba(0,0,0,.08);
+    border-radius: 2px;
+    width: 160px; height: 263px;  /* ≈ 0.607 ratio */
+    flex-shrink: 0;
+    overflow: hidden;
+    display: flex; align-items: stretch;
+  }
+
+  .preview-sheet-inner {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    padding: 8px; font-size: 3.5px; line-height: 1.4;
+    color: #333; overflow: hidden; position: relative;
+  }
+
+  .sheet-placeholder {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    color: var(--color-gray-500);
+  }
+
+  .sheet-placeholder span { font-size: 1.8rem; opacity: .3; }
+  .sheet-placeholder small { font-size: var(--font-xs); }
+
+  /* Preview content rendered at tiny scale */
+  .preview-sheet-inner .preview-content {
+    position: absolute; inset: 0; padding: 8px;
+    font-size: 3.5px; line-height: 1.4; overflow: hidden;
+    word-break: break-word;
+  }
+
+  .preview-sheet-inner .preview-content .pr-row {
+    display: flex; gap: 4px; margin-bottom: 1.5px;
+  }
+
+  .preview-sheet-inner .preview-content .pr-label {
+    color: #888; min-width: 22px; font-size: 3px;
+  }
+
+  .preview-sheet-inner .preview-content .pr-val {
+    color: #111; font-weight: 600;
+  }
+
+  .preview-sheet-inner .preview-content .pr-divider {
+    height: 0.5px; background: #ccc; margin: 2px 0;
+  }
+
+  .preview-sheet-inner .preview-content .pr-body {
+    margin-top: 2px; font-size: 3.2px; color: #222;
+    max-height: 80px; overflow: hidden;
+  }
+
+  /* ── Sidebar ─────────────────────────────────────────────── */
+  .cd-sidebar { display: flex; flex-direction: column; gap: var(--space-2); }
+
+  .sb-section-title {
+    font-size: var(--font-xs); font-weight: 600; text-transform: uppercase;
+    letter-spacing: .1em; color: var(--color-gray-500);
+  }
+
+  .sb-divider { height: 1px; background: var(--color-gray-200); margin: var(--space-1) 0; }
+
+  .field { display: flex; flex-direction: column; gap: var(--space-1); }
+
+  .field label {
+    font-size: var(--font-xs); font-weight: 500; color: var(--color-gray-700);
     margin-bottom: 0;
   }
 
-  .btn-reset-margins {
-    background: var(--color-gray-100);
-    color: var(--color-gray-700);
-    border: 1px solid var(--color-gray-200);
-    border-radius: var(--radius-md);
-    font-size: var(--font-sm);
-    font-family: inherit;
-    padding: var(--space-2) var(--space-3);
-    cursor: pointer;
+  .field-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+  .field-row-3 { display: grid; grid-template-columns: auto 1fr 1fr; gap: var(--space-2); }
+  .field-grow  { flex: 1; }
+
+  /* Advanced margins */
+  .adv-details {
+    background: var(--color-white); border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-md); padding: var(--space-3);
+  }
+
+  .adv-details summary {
+    font-size: var(--font-xs); font-weight: 500; color: var(--color-gray-700);
+    cursor: pointer; user-select: none; list-style: none;
+    display: flex; align-items: center; gap: var(--space-2);
+  }
+
+  .adv-details summary::before {
+    content: '▶'; font-size: .6rem; color: var(--color-gray-500); transition: transform .2s;
+  }
+
+  .adv-details[open] summary::before { transform: rotate(90deg); }
+
+  .adv-inner { margin-top: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); }
+
+  .adv-hint {
+    font-size: var(--font-xs); color: var(--color-gray-500);
+    background: var(--color-gray-50); border-left: 3px solid var(--color-gray-200);
+    padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); margin: 0;
+  }
+
+  .btn-ghost {
+    background: transparent; border: none; color: var(--color-gray-500);
+    font-size: var(--font-xs); cursor: pointer; font-family: inherit;
+    text-align: left; padding: 0;
+  }
+
+  .btn-ghost:hover { color: var(--color-accent); }
+
+  /* Botones de descarga */
+  .btn-download {
+    width: 100%; padding: var(--space-3); font-size: var(--font-sm); font-weight: 600;
+    border: none; border-radius: var(--radius-md); color: #fff;
+    cursor: pointer; font-family: inherit; transition: background .2s;
+  }
+
+  .btn-download:disabled { background: var(--color-gray-200); color: var(--color-gray-500); cursor: not-allowed; }
+
+  .btn-correo  { background: #1a56db; }
+  .btn-correo:hover:not(:disabled)  { background: #1447bd; }
+
+  .btn-andreani { background: #059669; }
+  .btn-andreani:hover:not(:disabled) { background: #047857; }
+
+  /* ── Editor (below area) ─────────────────────────────────── */
+  .cd-editor-wrap { padding: var(--space-4) 0; }
+
+  .editor-card {
+    background: var(--color-white); border: 1px solid var(--color-gray-200);
+    border-radius: var(--radius-lg); overflow: hidden;
+  }
+
+  .editor-card-title {
+    font-size: var(--font-xs); font-weight: 600; text-transform: uppercase;
+    letter-spacing: .1em; color: var(--color-gray-500);
+    padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--color-gray-200);
+    background: var(--color-gray-50);
+  }
+
+  /* Toolbar */
+  .tb {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+    padding: 8px 12px; background: #f8fafc; border-bottom: 1px solid var(--color-gray-200);
+  }
+
+  .tbtn {
+    background: var(--color-white); border: 1px solid var(--color-gray-200);
+    color: var(--color-gray-700); cursor: pointer; border-radius: var(--radius-sm);
+    padding: 3px 8px; font-size: 12px; font-family: inherit;
+    display: flex; align-items: center; justify-content: center;
+    min-width: 28px; height: 28px; transition: all .15s; white-space: nowrap;
+  }
+
+  .tbtn:hover { background: var(--color-gray-50); border-color: var(--color-gray-400); }
+
+  .tbtn.on {
+    background: var(--color-accent); color: #fff;
+    border-color: var(--color-accent);
+  }
+
+  .tsel {
+    background: var(--color-white); border: 1px solid var(--color-gray-200);
+    color: var(--color-gray-700); font-family: inherit; font-size: 12px;
+    height: 28px; padding: 0 6px; border-radius: var(--radius-sm); cursor: pointer;
+    outline: none;
+  }
+
+  .tsel:focus { border-color: var(--color-primary); }
+
+  .tb-sep { width: 1px; height: 22px; background: var(--color-gray-200); margin: 0 2px; }
+
+  .tb-stat {
+    margin-left: auto; font-size: 10px; color: var(--color-gray-500);
     white-space: nowrap;
-    transition: background 0.2s;
   }
 
-  .btn-reset-margins:hover { background: var(--color-gray-200); }
-
-  /* ── Botón imprimir ─────────────────────────────────── */
-  .print-action { display: flex; }
-
-  .btn-print {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-3) var(--space-6);
-    background: var(--color-accent);
-    color: #fff;
-    border: none;
-    border-radius: var(--radius-md);
-    font-size: var(--font-base);
-    font-weight: 600;
-    font-family: inherit;
-    cursor: pointer;
-    transition: background 0.2s, transform 0.1s;
+  /* Editor viewport: mismas proporciones que caja Tiptap (19.5cm × 14cm) */
+  .editor-viewport {
+    overflow: auto; background: #e8e8e8;
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 24px;
   }
 
-  .btn-print:hover  { background: #c0303b; }
-  .btn-print:active { transform: scale(0.98); }
-
-  /* ── Quill: ajustes dentro del formulario ───────────── */
-  .ql-snow { max-width: 100%; }
-  .ql-container { font-size: var(--font-sm); }
-
-  /* ── Plantilla de impresión — oculta en pantalla ────── */
-  .cd-page { display: none; }
-
-  /* ── @media print ───────────────────────────────────── */
-  @media print {
-    /* Ocultar todo el shell de edetools y el formulario */
-    .site-header,
-    .breadcrumb-bar,
-    .tool-hero,
-    .site-footer,
-    #formWrap { display: none !important; }
-
-    /* Mostrar la plantilla */
-    .cd-page { display: block !important; }
-
-    /* Sin márgenes de página — los márgenes los controla .container */
-    @page { margin: 0; size: 21.59cm 35.56cm; }
-
-    body { margin: 0; padding: 0; }
+  .editor-page {
+    width: 19.5cm; min-height: 14cm; max-height: 14cm;
+    background: #f5f0e8;
+    border: 1px solid #c8bfa8;
+    overflow: auto; flex-shrink: 0;
   }
+
+  /* ProseMirror content area */
+  .editor-page .ProseMirror {
+    min-height: 14cm; padding: 20px 24px;
+    outline: none;
+    font-size: 10pt; line-height: 1.5;
+    color: #1a1a2e;
+    text-align: justify;
+    font-family: Arial, Helvetica, sans-serif;
+  }
+
+  .editor-page .ProseMirror p { margin: 0; }
+
+  /* Selection style */
+  .editor-page .ProseMirror ::selection { background: rgba(99,102,241,.25); }
 </style>
 
-<!-- ════════════════════════════════════════════════════
-     SCRIPT
-════════════════════════════════════════════════════ -->
-<!-- Quill desde CDN con is:inline para que Astro no lo procese -->
-<script is:inline src="https://cdn.jsdelivr.net/npm/quill@2.0.0-rc.5/dist/quill.js"></script>
+<!-- ══════════════════════════════════════════════════════════
+     TIPTAP BUNDLE (IIFE autocontenido, igual que el prototipo)
+     Se carga desde el archivo compilado servido por el proyecto.
+     Si no existe, se puede poner el bundle en /public/tiptap-bundle.js
+     o cargarlo inline. Aquí usamos el mismo script tag que el prototipo.
+══════════════════════════════════════════════════════════ -->
+<!--
+  NOTA: El bundle IIFE de Tiptap (~318 KB) debe estar en:
+    /public/tiptap-bundle.js
+  y expone window.TiptapBundle = { Editor, Extension, Mark, StarterKit,
+    Underline, TextAlign, FontFamily, TextStyle, FontSize }
+
+  Podés generar ese archivo corriendo:
+    node build-tiptap-bundle.js
+  (script de esbuild incluido en el proyecto)
+
+  Por ahora lo cargamos con is:inline para no romper el build:
+-->
+<script is:inline src="/tiptap-bundle.js"></script>
 
 <script>
+// ══════════════════════════════════════════════════════════════
+// LÓGICA PRINCIPAL — carta-documento.astro
+// ══════════════════════════════════════════════════════════════
 (function () {
-  // ── Inicializar Quill ────────────────────────────────
-  // @ts-ignore
-  const quill = new Quill('#editor', {
-    modules: {
-      toolbar: [
-        ['bold', 'italic', 'underline', 'strike'],
-        [{ size: ['small', false, 'large', 'huge'] }],
-        [{ align: [] }],
+
+  // ── Esperar a que el bundle esté listo ──────────────────────
+  function waitBundle(cb) {
+    if (window.TiptapBundle && window.TiptapBundle.Editor) { cb(); return; }
+    setTimeout(() => waitBundle(cb), 50);
+  }
+
+  waitBundle(function () {
+    var B = window.TiptapBundle;
+
+    // ── Inicializar Tiptap ────────────────────────────────────
+    var editor = new B.Editor({
+      element: document.getElementById('editor-mount'),
+      extensions: [
+        B.StarterKit,
+        B.Underline,
+        B.TextAlign.configure({ types: ['heading', 'paragraph'], defaultAlignment: 'justify' }),
+        B.FontFamily.configure({ types: ['textStyle'] }),
+        B.FontSize,
+        B.Extension.create({
+          name: 'lineHeight',
+          addGlobalAttributes: function () {
+            return [{
+              types: ['paragraph', 'heading'],
+              attributes: {
+                lineHeight: {
+                  default: '1.5',
+                  parseHTML: function (el) { return el.style.lineHeight || '1.5'; },
+                  renderHTML: function (a) {
+                    return a.lineHeight && a.lineHeight !== '1.5'
+                      ? { style: 'line-height:' + a.lineHeight } : {};
+                  }
+                }
+              }
+            }];
+          },
+          addCommands: function () {
+            return {
+              setLineHeight: function (val) {
+                return function (ref) {
+                  return ref.commands.updateAttributes('paragraph', { lineHeight: val });
+                };
+              }
+            };
+          }
+        })
       ],
-    },
-    theme: 'snow',
-  });
+      content: '<p>Escriba aquí el cuerpo de la carta documento.</p>',
+      onTransaction: function () { syncToolbar(); updatePreview(); }
+    });
 
-  // ── Referencias del formulario ───────────────────────
-  const get = (id: string) => document.getElementById(id) as HTMLInputElement;
+    // ── Toolbar sync ──────────────────────────────────────────
+    function q(id) { return document.getElementById(id); }
 
-  const printBtn    = document.getElementById('printBtn')    as HTMLButtonElement;
-  const resMargin   = document.getElementById('res_margin')  as HTMLButtonElement;
-  const cdContainer = document.getElementById('cdContainer') as HTMLDivElement;
+    function syncToolbar() {
+      q('b-bold')  .classList.toggle('on', editor.isActive('bold'));
+      q('b-italic').classList.toggle('on', editor.isActive('italic'));
+      q('b-under') .classList.toggle('on', editor.isActive('underline'));
+      q('b-strike').classList.toggle('on', editor.isActive('strike'));
+      q('b-left')  .classList.toggle('on', editor.isActive({ textAlign: 'left' }));
+      q('b-center').classList.toggle('on', editor.isActive({ textAlign: 'center' }));
+      q('b-right') .classList.toggle('on', editor.isActive({ textAlign: 'right' }));
+      q('b-just')  .classList.toggle('on', editor.isActive({ textAlign: 'justify' }));
+      var txt = editor.getText();
+      q('tb-stat').textContent = txt.length + ' c · ' +
+        txt.split(/\s+/).filter(Boolean).length + ' pal';
+    }
 
-  // ── Restablecer márgenes ─────────────────────────────
-  resMargin.addEventListener('click', () => {
-    get('margin_top').value  = '2.56';
-    get('margin_left').value = '0.60';
-  });
+    q('b-bold')  .onclick = function () { editor.chain().focus().toggleBold().run(); };
+    q('b-italic').onclick = function () { editor.chain().focus().toggleItalic().run(); };
+    q('b-under') .onclick = function () { editor.chain().focus().toggleUnderline().run(); };
+    q('b-strike').onclick = function () { editor.chain().focus().toggleStrike().run(); };
+    q('b-left')  .onclick = function () { editor.chain().focus().setTextAlign('left').run(); };
+    q('b-center').onclick = function () { editor.chain().focus().setTextAlign('center').run(); };
+    q('b-right') .onclick = function () { editor.chain().focus().setTextAlign('right').run(); };
+    q('b-just')  .onclick = function () { editor.chain().focus().setTextAlign('justify').run(); };
 
-  // ── Recoger datos del formulario ─────────────────────
-  function getDatos() {
-    return {
-      remitente: {
-        name:    get('name_rt').value.trim(),
-        address: get('address_rt').value.trim(),
-        cp:      get('cp_rt').value.trim(),
-        city:    get('city_rt').value.trim(),
-        state:   get('state_rt').value.trim(),
-      },
-      destinatario: {
-        name:    get('name_dt').value.trim(),
-        address: get('address_dt').value.trim(),
-        cp:      get('cp_dt').value.trim(),
-        city:    get('city_dt').value.trim(),
-        state:   get('state_dt').value.trim(),
-      },
-      body:    (document.querySelector('.ql-editor') as HTMLElement).innerHTML.trim(),
-      firma:   get('sing_name').value.trim(),
-      dni:     get('sing_dni').value.trim(),
-      mTop:    get('margin_top').value.trim()  || '2.56',
-      mLeft:   get('margin_left').value.trim() || '0.60',
+    q('s-ff').onchange = function () { editor.chain().focus().setFontFamily(this.value).run(); };
+    q('s-fs').onchange = function () { editor.chain().focus().setMark('textStyle', { fontSize: this.value }).run(); };
+    q('s-lh').onchange = function () { editor.chain().focus().setLineHeight(this.value).run(); };
+
+    // ── Recoger datos del formulario ──────────────────────────
+    function gv(id) { return (q(id) ? q(id).value.trim() : ''); }
+
+    function getDatos() {
+      return {
+        rt: { name: gv('name_rt'), address: gv('address_rt'), cp: gv('cp_rt'), city: gv('city_rt'), state: gv('state_rt') },
+        dt: { name: gv('name_dt'), address: gv('address_dt'), cp: gv('cp_dt'), city: gv('city_dt'), state: gv('state_dt') },
+        firma: gv('sing_name'),
+        dni:   gv('sing_dni'),
+        mTop:  parseFloat(gv('margin_top'))  || 2.56,
+        mLeft: parseFloat(gv('margin_left')) || 0.60,
+        bodyJson: editor.getJSON(),
+        bodyText: editor.getText(),
+      };
+    }
+
+    // ── Preview tiny ──────────────────────────────────────────
+    function updatePreview() {
+      var d = getDatos();
+      var inner = q('previewSheetInner');
+      var placeholder = q('sheetPlaceholder');
+
+      var hasContent = d.rt.name || d.dt.name || d.bodyText.trim();
+      if (!hasContent) {
+        if (placeholder) placeholder.style.display = '';
+        inner.innerHTML = '';
+        inner.appendChild(placeholder || document.createElement('div'));
+        return;
+      }
+
+      if (placeholder) placeholder.style.display = 'none';
+
+      function row(label, val) {
+        if (!val) return '';
+        return '<div class="pr-row"><span class="pr-label">' + label + '</span>' +
+          '<span class="pr-val">' + esc(val) + '</span></div>';
+      }
+
+      function esc(s) {
+        return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      }
+
+      var bodyPreview = esc(d.bodyText.slice(0, 300));
+
+      inner.innerHTML =
+        '<div class="preview-content">' +
+          '<div style="font-size:2.5px;color:#aaa;margin-bottom:1px">REMITENTE</div>' +
+          row('Nombre', d.rt.name) +
+          row('Dir.', d.rt.address) +
+          row('CP', d.rt.cp ? d.rt.cp + ' ' + d.rt.city : d.rt.city) +
+          '<div class="pr-divider"></div>' +
+          '<div style="font-size:2.5px;color:#aaa;margin-bottom:1px">DESTINATARIO</div>' +
+          row('Nombre', d.dt.name) +
+          row('Dir.', d.dt.address) +
+          row('CP', d.dt.cp ? d.dt.cp + ' ' + d.dt.city : d.dt.city) +
+          '<div class="pr-divider"></div>' +
+          '<div class="pr-body">' + bodyPreview + '</div>' +
+          (d.firma ? '<div class="pr-divider"></div>' +
+            '<div class="pr-row"><span class="pr-label">Firma</span><span class="pr-val">' + esc(d.firma) + '</span></div>' : '') +
+        '</div>';
+
+      if (q('previewHint')) {
+        q('previewHint').textContent = (d.rt.name || '—') + ' → ' + (d.dt.name || '—');
+      }
+    }
+
+    // Escuchar cambios en todos los inputs del sidebar
+    ['name_rt','address_rt','cp_rt','city_rt','state_rt',
+     'name_dt','address_dt','cp_dt','city_dt','state_dt',
+     'sing_name','sing_dni','margin_top','margin_left'].forEach(function(id) {
+      var el = q(id);
+      if (el) el.addEventListener('input', updatePreview);
+    });
+
+    // Restablecer márgenes
+    q('btn_reset_margins').addEventListener('click', function () {
+      q('margin_top').value  = '2.56';
+      q('margin_left').value = '0.60';
+      updatePreview();
+    });
+
+    // ── Generación de PDF con pdf-lib client-side ─────────────
+    //
+    // COORDINADAS — Correo Argentino
+    // (sistema: origen top-left, unidad: cm sobre hoja 21.59 × 35.56 cm)
+    //
+    // La carta documento pre-impresa tiene dos bloques idénticos
+    // (uno para la pieza y otro el talón). Llenamos ambos.
+    //
+    // Ajustes: mTop y mLeft se suman a todas las coordenadas Y/X
+    // para compensar la impresora y el papel pre-impreso.
+    //
+    // Coordenadas base (relativas al borde del contenido, sin márgenes):
+    var CORREO = {
+      // Bloque 1 (pieza principal)
+      b1_name_rt:    { x: 1.20, y: 1.10, w: 9.20, fs: 8 },
+      b1_name_dt:    { x: 10.40, y: 1.10, w: 9.20, fs: 8 },
+      b1_address_rt: { x: 1.20, y: 1.95, w: 9.20, fs: 8 },
+      b1_address_dt: { x: 10.40, y: 1.95, w: 9.20, fs: 8 },
+      b1_cp_rt:      { x: 1.20, y: 2.80, w: 2.75, fs: 8 },
+      b1_city_rt:    { x: 3.95, y: 2.80, w: 3.60, fs: 8 },
+      b1_state_rt:   { x: 7.55, y: 2.80, w: 2.80, fs: 8 },
+      b1_cp_dt:      { x: 10.40, y: 2.80, w: 2.75, fs: 8 },
+      b1_city_dt:    { x: 13.15, y: 2.80, w: 3.60, fs: 8 },
+      b1_state_dt:   { x: 16.75, y: 2.80, w: 2.80, fs: 8 },
+      // Cuerpo
+      body:          { x: 0.30, y: 4.20, w: 19.95, h: 14.00, fs: 10 },
+      // Firma
+      firma:         { x: 12.10, y: 19.00, w: 6.00, fs: 8 },
+      dni:           { x: 12.10, y: 19.75, w: 6.00, fs: 8 },
+      // Bloque 2 (talón / copia)
+      b2_name_rt:    { x: 1.20, y: 21.50, w: 9.20, fs: 8 },
+      b2_name_dt:    { x: 10.40, y: 21.50, w: 9.20, fs: 8 },
+      b2_address_rt: { x: 1.20, y: 22.35, w: 9.20, fs: 8 },
+      b2_address_dt: { x: 10.40, y: 22.35, w: 9.20, fs: 8 },
+      b2_cp_rt:      { x: 1.20, y: 23.20, w: 2.75, fs: 8 },
+      b2_city_rt:    { x: 3.95, y: 23.20, w: 3.60, fs: 8 },
+      b2_state_rt:   { x: 7.55, y: 23.20, w: 2.80, fs: 8 },
+      b2_cp_dt:      { x: 10.40, y: 23.20, w: 2.75, fs: 8 },
+      b2_city_dt:    { x: 13.15, y: 23.20, w: 3.60, fs: 8 },
+      b2_state_dt:   { x: 16.75, y: 23.20, w: 2.80, fs: 8 },
     };
-  }
 
-  // ── Rellenar la plantilla de impresión ───────────────
-  function fillTemplate(d: ReturnType<typeof getDatos>) {
-    // Función auxiliar para setear texto de un elemento
-    const setText = (id: string, val: string) => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = val;
+    // Coordenadas Andreani — PLACEHOLDER (ajustar según hoja real)
+    // Mismo esquema, valores aproximados — vos los afinarás.
+    var ANDREANI = {
+      b1_name_rt:    { x: 0.80, y: 1.20, w: 9.00, fs: 8 },
+      b1_name_dt:    { x: 10.20, y: 1.20, w: 9.00, fs: 8 },
+      b1_address_rt: { x: 0.80, y: 2.00, w: 9.00, fs: 8 },
+      b1_address_dt: { x: 10.20, y: 2.00, w: 9.00, fs: 8 },
+      b1_cp_rt:      { x: 0.80, y: 2.80, w: 2.50, fs: 8 },
+      b1_city_rt:    { x: 3.30, y: 2.80, w: 3.60, fs: 8 },
+      b1_state_rt:   { x: 6.90, y: 2.80, w: 2.80, fs: 8 },
+      b1_cp_dt:      { x: 10.20, y: 2.80, w: 2.50, fs: 8 },
+      b1_city_dt:    { x: 12.70, y: 2.80, w: 3.60, fs: 8 },
+      b1_state_dt:   { x: 16.30, y: 2.80, w: 2.80, fs: 8 },
+      body:          { x: 0.30, y: 4.20, w: 19.50, h: 13.50, fs: 10 },
+      firma:         { x: 12.00, y: 18.50, w: 6.00, fs: 8 },
+      dni:           { x: 12.00, y: 19.25, w: 6.00, fs: 8 },
+      b2_name_rt:    { x: 0.80, y: 21.00, w: 9.00, fs: 8 },
+      b2_name_dt:    { x: 10.20, y: 21.00, w: 9.00, fs: 8 },
+      b2_address_rt: { x: 0.80, y: 21.80, w: 9.00, fs: 8 },
+      b2_address_dt: { x: 10.20, y: 21.80, w: 9.00, fs: 8 },
+      b2_cp_rt:      { x: 0.80, y: 22.60, w: 2.50, fs: 8 },
+      b2_city_rt:    { x: 3.30, y: 22.60, w: 3.60, fs: 8 },
+      b2_state_rt:   { x: 6.90, y: 22.60, w: 2.80, fs: 8 },
+      b2_cp_dt:      { x: 10.20, y: 22.60, w: 2.50, fs: 8 },
+      b2_city_dt:    { x: 12.70, y: 22.60, w: 3.60, fs: 8 },
+      b2_state_dt:   { x: 16.30, y: 22.60, w: 2.80, fs: 8 },
     };
-    const setHtml = (id: string, val: string) => {
-      const el = document.getElementById(id);
-      if (el) el.innerHTML = val;
-    };
 
-    // Bloque 1 (remitente / destinatario)
-    setText('p_name_rt',    d.remitente.name);
-    setText('p_name_dt',    d.destinatario.name);
-    setText('p_address_rt', d.remitente.address);
-    setText('p_address_dt', d.destinatario.address);
-    setText('p_cp_rt',      d.remitente.cp);
-    setText('p_city_rt',    d.remitente.city);
-    setText('p_state_rt',   d.remitente.state);
-    setText('p_cp_dt',      d.destinatario.cp);
-    setText('p_city_dt',    d.destinatario.city);
-    setText('p_state_dt',   d.destinatario.state);
+    // ── pdf-lib lazy import ───────────────────────────────────
+    var _pdfLib = null;
+    async function getPdfLib() {
+      if (_pdfLib) return _pdfLib;
+      var mod = await import('https://esm.sh/pdf-lib@1.17.1?bundle');
+      _pdfLib = mod;
+      return mod;
+    }
 
-    // Bloque 2 (copia del encabezado)
-    setText('p_name_rt2',    d.remitente.name);
-    setText('p_name_dt2',    d.destinatario.name);
-    setText('p_address_rt2', d.remitente.address);
-    setText('p_address_dt2', d.destinatario.address);
-    setText('p_cp_rt2',      d.remitente.cp);
-    setText('p_city_rt2',    d.remitente.city);
-    setText('p_state_rt2',   d.remitente.state);
-    setText('p_cp_dt2',      d.destinatario.cp);
-    setText('p_city_dt2',    d.destinatario.city);
-    setText('p_state_dt2',   d.destinatario.state);
+    // ── Parsear JSON de Tiptap → líneas de texto plano ────────
+    // Extrae el texto de cada nodo del JSON de Tiptap respetando
+    // párrafos y saltos de línea. Devuelve [{text, align, lineHeight, marks}]
+    function extractLines(json) {
+      var lines = [];
+      if (!json || !json.content) return lines;
+      json.content.forEach(function (node) {
+        if (node.type === 'paragraph' || node.type === 'heading') {
+          var text = '';
+          var align = (node.attrs && node.attrs.textAlign) || 'justify';
+          var lineH  = (node.attrs && node.attrs.lineHeight) || '1.5';
+          var marks  = []; // marks del primer texto del párrafo (simplificación)
+          if (node.content) {
+            node.content.forEach(function (inline) {
+              if (inline.type === 'text') {
+                text += inline.text || '';
+                if (!marks.length && inline.marks) marks = inline.marks;
+              } else if (inline.type === 'hardBreak') {
+                lines.push({ text: text, align: align, lineHeight: parseFloat(lineH), marks: marks });
+                text = '';
+                marks = [];
+              }
+            });
+          }
+          lines.push({ text: text, align: align, lineHeight: parseFloat(lineH), marks: marks });
+        }
+      });
+      return lines;
+    }
 
-    // Cuerpo (HTML de Quill)
-    setHtml('p_body', d.body);
+    // ── Dibujar texto con word-wrap en pdf-lib ─────────────────
+    // x, y, w, h: en cm. fs: font-size en pt. page coords bottom-left.
+    // Retorna las líneas dibujadas.
+    async function drawWrappedText(page, pdfLib, text, opts) {
+      var CM = 72 / 2.54;
+      var xPt = opts.x * CM;
+      var wPt = opts.w * CM;
+      var fsPt = opts.fs || 10;
 
-    // Firma
-    setText('p_firmante', d.firma);
-    setText('p_dni',      d.dni);
+      var font = await page.doc.embedFont(pdfLib.StandardFonts.Helvetica);
+      var fontB = await page.doc.embedFont(pdfLib.StandardFonts.HelveticaBold);
+      var useFont = opts.bold ? fontB : font;
+      var color = pdfLib.rgb(0, 0, 0);
+      var pageH  = page.getHeight();
 
-    // Márgenes de posicionamiento sobre la hoja pre-impresa
-    cdContainer.style.marginLeft = `${d.mLeft}cm`;
-    cdContainer.style.marginTop  = `${d.mTop}cm`;
-  }
+      // word-wrap
+      var words = String(text).split(' ');
+      var curLine = '';
+      var allLines = [];
+      words.forEach(function (word) {
+        var test = curLine ? curLine + ' ' + word : word;
+        var w = useFont.widthOfTextAtSize(test, fsPt);
+        if (w > wPt && curLine) {
+          allLines.push(curLine);
+          curLine = word;
+        } else {
+          curLine = test;
+        }
+      });
+      if (curLine) allLines.push(curLine);
 
-  // ── Imprimir ─────────────────────────────────────────
-  printBtn.addEventListener('click', () => {
-    const datos = getDatos();
-    fillTemplate(datos);
-    // Pequeño delay para que el DOM se actualice antes de print()
-    setTimeout(() => window.print(), 60);
-  });
+      var lhPt = fsPt * (opts.lineHeight || 1.3);
+      var yStart = pageH - opts.y * CM - fsPt;
+
+      allLines.forEach(function (line, i) {
+        var yPt = yStart - i * lhPt;
+        if (yPt < 0) return;
+        page.drawText(line, { x: xPt, y: yPt, size: fsPt, font: useFont, color: color });
+      });
+    }
+
+    // ── Dibujar el cuerpo (JSON Tiptap) con estilos básicos ───
+    async function drawBody(page, pdfLib, json, bodyCoord, mTop, mLeft) {
+      var CM = 72 / 2.54;
+      var font  = await page.doc.embedFont(pdfLib.StandardFonts.Helvetica);
+      var fontB = await page.doc.embedFont(pdfLib.StandardFonts.HelveticaBold);
+      var pageH = page.getHeight();
+      var color = pdfLib.rgb(0, 0, 0);
+
+      var lines = extractLines(json);
+      var xBase = (bodyCoord.x + mLeft) * CM;
+      var wPt   = bodyCoord.w * CM;
+      var yStart = pageH - (bodyCoord.y + mTop) * CM;
+      var yMin   = pageH - (bodyCoord.y + mTop + bodyCoord.h) * CM;
+
+      var curY = yStart;
+
+      for (var li = 0; li < lines.length; li++) {
+        var lineObj = lines[li];
+        var fsPt  = 10; // default
+        var bold  = false;
+        var lhMul = lineObj.lineHeight || 1.5;
+
+        // Extraer font-size y bold del primer mark si existe
+        if (lineObj.marks && lineObj.marks.length) {
+          lineObj.marks.forEach(function (mk) {
+            if (mk.type === 'bold') bold = true;
+            if (mk.type === 'textStyle' && mk.attrs) {
+              if (mk.attrs.fontSize) {
+                var fsStr = String(mk.attrs.fontSize);
+                fsPt = parseFloat(fsStr) || fsPt;
+              }
+            }
+          });
+        }
+
+        var useFont = bold ? fontB : font;
+        var lhPt    = fsPt * lhMul;
+
+        // word-wrap
+        var words = String(lineObj.text).split(' ');
+        var curLine = '';
+        var wrappedLines = [];
+        words.forEach(function (word) {
+          var test = curLine ? curLine + ' ' + word : word;
+          if (useFont.widthOfTextAtSize(test, fsPt) > wPt && curLine) {
+            wrappedLines.push(curLine);
+            curLine = word;
+          } else {
+            curLine = test;
+          }
+        });
+        if (curLine) wrappedLines.push(curLine);
+        if (!wrappedLines.length) wrappedLines.push('');
+
+        for (var wi = 0; wi < wrappedLines.length; wi++) {
+          if (curY - fsPt < yMin) break; // no exceder caja
+          if (wrappedLines[wi].trim()) {
+            page.drawText(wrappedLines[wi], {
+              x: xBase, y: curY - fsPt,
+              size: fsPt, font: useFont, color: color,
+            });
+          }
+          curY -= lhPt;
+        }
+      }
+    }
+
+    // ── Generar PDF para una correo ───────────────────────────
+    async function generarPDF(coords, filename) {
+      var pdfLib = await getPdfLib();
+      var d = getDatos();
+      var CM = 72 / 2.54;
+
+      var doc = await pdfLib.PDFDocument.create();
+      doc.setTitle('Carta Documento');
+      doc.setProducer('edetools / carta-documento');
+
+      // Hoja oficio: 21.59 × 35.56 cm
+      var pW = 21.59 * CM;
+      var pH = 35.56 * CM;
+      var page = doc.addPage([pW, pH]);
+
+      var mT = d.mTop;
+      var mL = d.mLeft;
+
+      // Helper: dibuja un campo de texto simple (una sola línea)
+      async function drawField(coord, text) {
+        if (!text) return;
+        await drawWrappedText(page, pdfLib, text, {
+          x: coord.x + mL, y: coord.y + mT,
+          w: coord.w, fs: coord.fs || 8,
+          lineHeight: 1.3,
+        });
+      }
+
+      // Bloque 1
+      await drawField(coords.b1_name_rt,    d.rt.name);
+      await drawField(coords.b1_name_dt,    d.dt.name);
+      await drawField(coords.b1_address_rt, d.rt.address);
+      await drawField(coords.b1_address_dt, d.dt.address);
+      await drawField(coords.b1_cp_rt,      d.rt.cp);
+      await drawField(coords.b1_city_rt,    d.rt.city);
+      await drawField(coords.b1_state_rt,   d.rt.state);
+      await drawField(coords.b1_cp_dt,      d.dt.cp);
+      await drawField(coords.b1_city_dt,    d.dt.city);
+      await drawField(coords.b1_state_dt,   d.dt.state);
+
+      // Cuerpo
+      await drawBody(page, pdfLib, d.bodyJson, coords.body, mT, mL);
+
+      // Firma
+      await drawField(coords.firma, d.firma);
+      await drawField(coords.dni,   d.dni ? 'DNI: ' + d.dni : '');
+
+      // Bloque 2 (talón)
+      await drawField(coords.b2_name_rt,    d.rt.name);
+      await drawField(coords.b2_name_dt,    d.dt.name);
+      await drawField(coords.b2_address_rt, d.rt.address);
+      await drawField(coords.b2_address_dt, d.dt.address);
+      await drawField(coords.b2_cp_rt,      d.rt.cp);
+      await drawField(coords.b2_city_rt,    d.rt.city);
+      await drawField(coords.b2_state_rt,   d.rt.state);
+      await drawField(coords.b2_cp_dt,      d.dt.cp);
+      await drawField(coords.b2_city_dt,    d.dt.city);
+      await drawField(coords.b2_state_dt,   d.dt.state);
+
+      var bytes = await doc.save();
+      var blob  = new Blob([bytes], { type: 'application/pdf' });
+      var url   = URL.createObjectURL(blob);
+      var a     = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // ── Botones de descarga ───────────────────────────────────
+    async function handleDownload(coords, filename, btn) {
+      btn.disabled = true;
+      var orig = btn.textContent;
+      btn.textContent = 'Generando PDF…';
+      try {
+        await generarPDF(coords, filename);
+      } catch (err) {
+        alert('Error generando el PDF: ' + err.message);
+        console.error(err);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = orig;
+      }
+    }
+
+    q('btnCorreo').addEventListener('click', function () {
+      handleDownload(CORREO, 'carta-documento-correo-argentino.pdf', q('btnCorreo'));
+    });
+
+    q('btnAndreani').addEventListener('click', function () {
+      handleDownload(ANDREANI, 'carta-documento-andreani.pdf', q('btnAndreani'));
+    });
+
+    // ── Init ──────────────────────────────────────────────────
+    syncToolbar();
+    updatePreview();
+  }); // end waitBundle
+
 })();
 </script>
