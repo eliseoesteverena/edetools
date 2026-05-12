@@ -682,53 +682,101 @@ const ANDREANI = {
 // PDF — helpers
 // ══════════════════════════════════════════════════════════════════
 const CM = 72 / 2.54;  // puntos por cm
+const BLACK = rgb(0, 0, 0);
 
-// Parsear JSON de Tiptap → array de párrafos con metadata
+// ── Caché de fonts por documento ─────────────────────────────────
+// pdf-lib acepta embeber la misma font varias veces pero es redundante.
+// La cacheamos con WeakMap keyed por doc.
+const _fontCache = new WeakMap();
+
+async function getFont(doc, family, bold, italic) {
+  if (!_fontCache.has(doc)) _fontCache.set(doc, {});
+  const cache = _fontCache.get(doc);
+
+  // Mapear familia Tiptap → familia pdf-lib
+  // pdf-lib solo tiene Helvetica (sans), Times (serif), Courier (mono).
+  // Fonts CSS que llegan como "Arial,sans-serif", "Times New Roman,serif", etc.
+  const isSerif  = /times|georgia|garamond|serif/i.test(family || '');
+  const isMono   = /courier|mono/i.test(family || '');
+  const base     = isMono ? 'Courier' : isSerif ? 'Times' : 'Helvetica';
+
+  // Nombre de la StandardFont
+  const sfName = base === 'Courier'
+    ? (bold && italic ? StandardFonts.CourierBoldOblique
+       : bold         ? StandardFonts.CourierBold
+       : italic       ? StandardFonts.CourierOblique
+       :                StandardFonts.Courier)
+    : base === 'Times'
+    ? (bold && italic ? StandardFonts.TimesRomanBoldItalic
+       : bold         ? StandardFonts.TimesRomanBold
+       : italic       ? StandardFonts.TimesRomanItalic
+       :                StandardFonts.TimesRoman)
+    : /* Helvetica */
+      (bold && italic ? StandardFonts.HelveticaBoldOblique
+       : bold         ? StandardFonts.HelveticaBold
+       : italic       ? StandardFonts.HelveticaOblique
+       :                StandardFonts.Helvetica);
+
+  const key = sfName;
+  if (!cache[key]) cache[key] = await doc.embedFont(sfName);
+  return cache[key];
+}
+
+// ── Parsear nodos de Tiptap ────────────────────────────────────────
+// Devuelve array de párrafos: { align, lineH, runs[] }
+// Cada run: { text, bold, italic, underline, fontSize, fontFamily }
 function extractParagraphs(json) {
-  const result = [];
-  if (!json || !json.content) return result;
+  const paragraphs = [];
+  if (!json?.content) return paragraphs;
 
   for (const node of json.content) {
     if (node.type !== 'paragraph' && node.type !== 'heading') continue;
 
-    const align    = node.attrs?.textAlign || 'justify';
-    const lineH    = parseFloat(node.attrs?.lineHeight || '1.5');
-    const segments = []; // { text, bold, italic, underline, fontSize }
+    const align  = node.attrs?.textAlign || 'left';
+    const lineH  = parseFloat(node.attrs?.lineHeight || '1.5');
+    const runs   = [];
 
-    if (node.content) {
-      for (const inline of node.content) {
-        if (inline.type === 'hardBreak') {
-          result.push({ segments, align, lineH });
-          segments.length = 0;
-          continue;
-        }
-        if (inline.type !== 'text') continue;
-
-        let bold = false, italic = false, underline = false, fontSize = 10;
-        for (const mk of inline.marks || []) {
-          if (mk.type === 'bold')      bold = true;
-          if (mk.type === 'italic')    italic = true;
-          if (mk.type === 'underline') underline = true;
-          if (mk.type === 'textStyle' && mk.attrs?.fontSize) {
-            fontSize = parseFloat(mk.attrs.fontSize) || 10;
-          }
-        }
-        segments.push({ text: inline.text || '', bold, italic, underline, fontSize });
+    for (const inline of node.content || []) {
+      if (inline.type === 'hardBreak') {
+        paragraphs.push({ align, lineH, runs: [...runs] });
+        runs.length = 0;
+        continue;
       }
+      if (inline.type !== 'text') continue;
+
+      let bold = false, italic = false, underline = false;
+      let fontSize = 10, fontFamily = '';
+
+      for (const mk of inline.marks || []) {
+        if (mk.type === 'bold')      bold = true;
+        if (mk.type === 'italic')    italic = true;
+        if (mk.type === 'underline') underline = true;
+        if (mk.type === 'textStyle') {
+          if (mk.attrs?.fontSize)   fontSize   = parseFloat(mk.attrs.fontSize) || 10;
+          if (mk.attrs?.fontFamily) fontFamily = mk.attrs.fontFamily;
+        }
+      }
+      runs.push({ text: inline.text || '', bold, italic, underline, fontSize, fontFamily });
     }
-    result.push({ segments, align, lineH });
+
+    paragraphs.push({ align, lineH, runs });
   }
-  return result;
+  return paragraphs;
 }
 
-// Word-wrap de una línea de texto dentro de un ancho dado (en pt)
-function wrapText(text, font, fontSize, maxW) {
-  const words = String(text).split(' ');
+// ── Word-wrap ──────────────────────────────────────────────────────
+// Toma el texto de todos los runs de un párrafo (considerando el font
+// del primer run para el wrap — aproximación válida en párrafos homogéneos)
+// y devuelve array de strings ya cortadas.
+function wrapRuns(runs, fontForWrap, defaultFs, maxWPt) {
+  const fullText = runs.map(r => r.text).join('');
+  const fs = runs[0]?.fontSize || defaultFs;
+  const words = fullText.split(' ');
   const lines = [];
   let cur = '';
   for (const word of words) {
     const test = cur ? cur + ' ' + word : word;
-    if (font.widthOfTextAtSize(test, fontSize) > maxW && cur) {
+    if (fontForWrap.widthOfTextAtSize(test, fs) > maxWPt && cur) {
       lines.push(cur); cur = word;
     } else { cur = test; }
   }
@@ -736,66 +784,90 @@ function wrapText(text, font, fontSize, maxW) {
   return lines.length ? lines : [''];
 }
 
-// Dibujar texto de una sola línea con word-wrap, sin superar yMin
+// ── Calcular xOffset según alineación ─────────────────────────────
+function alignX(xBase, wPt, lineText, font, fs, align) {
+  if (align === 'center') {
+    const tw = font.widthOfTextAtSize(lineText, fs);
+    return xBase + (wPt - tw) / 2;
+  }
+  if (align === 'right') {
+    const tw = font.widthOfTextAtSize(lineText, fs);
+    return xBase + wPt - tw;
+  }
+  // left / justify → xBase (justify real requeriría espaciado variable, no soportado en pdf-lib)
+  return xBase;
+}
+
+// ── Dibujar campo simple (datos del formulario) ──────────────────
 async function drawField(page, text, coord, mTop, mLeft) {
   if (!text) return;
-  const font  = await page.doc.embedFont(StandardFonts.Helvetica);
+  const doc   = page.doc;
+  const font  = await getFont(doc, '', false, false);
   const pH    = page.getHeight();
   const xPt   = (coord.x + mLeft) * CM;
   const wPt   = coord.w * CM;
   const fsPt  = coord.fs || 8;
-  const color = rgb(0, 0, 0);
-
-  const lines = wrapText(text, font, fsPt, wPt);
   const lhPt  = fsPt * 1.3;
   const yTop  = pH - (coord.y + mTop) * CM - fsPt;
 
-  lines.forEach((line, i) => {
+  const words = String(text).split(' ');
+  const lines = [];
+  let cur = '';
+  for (const word of words) {
+    const test = cur ? cur + ' ' + word : word;
+    if (font.widthOfTextAtSize(test, fsPt) > wPt && cur) { lines.push(cur); cur = word; }
+    else cur = test;
+  }
+  if (cur) lines.push(cur);
+
+  for (let i = 0; i < lines.length; i++) {
     const y = yTop - i * lhPt;
-    if (y > 0) page.drawText(line, { x: xPt, y, size: fsPt, font, color });
-  });
+    if (y > 0) page.drawText(lines[i], { x: xPt, y, size: fsPt, font, color: BLACK });
+  }
 }
 
-// Dibujar el cuerpo completo del editor respetando estilos y caja
+// ── Dibujar cuerpo del editor ─────────────────────────────────────
+// Respeta: fontFamily, fontSize, bold, italic (por párrafo homogéneo),
+// textAlign (left/center/right/justify), lineHeight, word-wrap.
 async function drawBody(page, json, coord, mTop, mLeft) {
-  const fontR  = await page.doc.embedFont(StandardFonts.Helvetica);
-  const fontB  = await page.doc.embedFont(StandardFonts.HelveticaBold);
-  const fontI  = await page.doc.embedFont(StandardFonts.HelveticaOblique);
-  const fontBI = await page.doc.embedFont(StandardFonts.HelveticaBoldOblique);
-  const pH     = page.getHeight();
-  const color  = rgb(0, 0, 0);
-  const xBase  = (coord.x + mLeft) * CM;
-  const wPt    = coord.w * CM;
-  const yMax   = pH - (coord.y + mTop) * CM;
-  const yMin   = pH - (coord.y + mTop + coord.h) * CM;
+  const doc   = page.doc;
+  const pH    = page.getHeight();
+  const xBase = (coord.x + mLeft) * CM;
+  const wPt   = coord.w * CM;
+  const yMax  = pH - (coord.y + mTop) * CM;
+  const yMin  = pH - (coord.y + mTop + coord.h) * CM;
+  const defFs = coord.fs || 10;
 
   let curY = yMax;
 
-  const paragraphs = extractParagraphs(json);
+  for (const para of extractParagraphs(json)) {
+    if (!para.runs.length) {
+      // Párrafo vacío → salto de línea
+      curY -= defFs * para.lineH;
+      if (curY < yMin) return;
+      continue;
+    }
 
-  for (const para of paragraphs) {
-    // Tomar el fontSize del primer segmento (simplificación razonable por párrafo)
-    const fsPt = para.segments[0]?.fontSize || coord.fs || 10;
-    const lhPt = fsPt * para.lineH;
+    // Usar el estilo del primer run del párrafo para word-wrap y alineación.
+    // Para documentos de carta (texto mayormente homogéneo) es suficiente.
+    const firstRun = para.runs[0];
+    const fsPt     = firstRun.fontSize || defFs;
+    const lhPt     = fsPt * para.lineH;
+    const font      = await getFont(doc, firstRun.fontFamily, firstRun.bold, firstRun.italic);
 
-    // Construir el texto completo del párrafo para word-wrap
-    const fullText = para.segments.map(s => s.text).join('');
-    const isBold   = para.segments.some(s => s.bold);
-    const isItalic = para.segments.some(s => s.italic);
+    const lines = wrapRuns(para.runs, font, defFs, wPt);
 
-    const font = isBold && isItalic ? fontBI
-               : isBold            ? fontB
-               : isItalic          ? fontI
-               :                     fontR;
-
-    const wrappedLines = wrapText(fullText, font, fsPt, wPt);
-
-    for (const line of wrappedLines) {
+    for (let li = 0; li < lines.length; li++) {
       const yDraw = curY - fsPt;
-      if (yDraw < yMin) return; // caja llena — cortar
+      if (yDraw < yMin) return;
 
+      const line = lines[li];
       if (line.trim()) {
-        page.drawText(line, { x: xBase, y: yDraw, size: fsPt, font, color });
+        // Alineación: en la última línea de un párrafo justify actúa como left
+        const isLastLine = li === lines.length - 1;
+        const effectiveAlign = (para.align === 'justify' && isLastLine) ? 'left' : para.align;
+        const xDraw = alignX(xBase, wPt, line, font, fsPt, effectiveAlign);
+        page.drawText(line, { x: xDraw, y: yDraw, size: fsPt, font, color: BLACK });
       }
       curY -= lhPt;
     }
